@@ -1,4 +1,4 @@
-# dsh-routing-suite 一键安装（Windows PowerShell）
+﻿# dsh-routing-suite 一键安装（Windows PowerShell）
 # 步骤：1) 装配注入器  2) 安装 router-standard 预设  3) 提示重启
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
