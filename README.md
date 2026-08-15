@@ -8,7 +8,7 @@
 ## 安装链（三步）
 
 ```powershell
-# 1. 拉套装（含两个 submodule）
+# 1. 拉套装（含三个 submodule）
 git clone --recurse-submodules https://github.com/yjh051108/dsh-routing-suite.git
 cd dsh-routing-suite
 
@@ -22,9 +22,15 @@ cd dsh-routing-suite
 # 步骤 1：装配注入器（官方装配，重启后由 bundles 接管）
 dsh plugin --profile web add .\injector
 
-# 步骤 2：安装 router-standard 预设
+# 步骤 2：安装路由预设（router-standard / router-spec / router-pro）
 $target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-standard'
-Copy-Item -Recurse .\preset\preset $target
+Copy-Item -Recurse .\preset\preset\router-standard $target
+
+$target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-spec'
+Copy-Item -Recurse .\preset\preset\router-spec $target
+
+$target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-pro'
+Copy-Item -Recurse .\preset\preset\router-pro $target
 
 # 步骤 3：重启 DSH → 新会话选择 Router Standard (experimental)
 ```
