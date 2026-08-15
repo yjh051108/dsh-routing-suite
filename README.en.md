@@ -23,6 +23,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 PowerShell 5.1 when the script contains non-ASCII text. PowerShell 7 users can
 also run `pwsh -File .\install.ps1` directly.
 
+The one-shot installer stops with an actionable error if `dsh` is unavailable
+or `injector/lib/index.js` has not been built. It reports completion only after
+the injector and both routing presets have been installed successfully.
+
 Or manually:
 
 ```powershell
