@@ -1,0 +1,26 @@
+{
+  "name": "@dsh-routing-suite/pro-lab",
+  "version": "0.1.0",
+  "description": "Opt-in DeepSeek V4 Pro experiment arms and sanitized trajectory evidence for dsh-routing-suite",
+  "type": "module",
+  "main": "./index.mjs",
+  "exports": {
+    ".": "./index.mjs",
+    "./core": "./lab-core.mjs"
+  },
+  "files": [
+    "index.mjs",
+    "lab-core.mjs",
+    "README.md",
+    "test.mjs",
+    "package.json"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "cordis": ">=4.0.0-rc <5",
+    "@deepseek-ai/dsh-tools": ">=0.0.1-rc <2"
+  },
+  "scripts": {
+    "test": "node --test test.mjs"
+  }
+}
