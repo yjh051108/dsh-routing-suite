@@ -1,0 +1,206 @@
+[
+  {
+    "name": "dsh-web-ui",
+    "repo": "zhu1090093659/dsh-web-ui",
+    "category": "ui",
+    "stars": 2814,
+    "desc": "DSH Web UI 皮肤/插件合集：任务板、Git 图、右侧面板、远程移动端 UI、桌宠、实时 token 统计。"
+  },
+  {
+    "name": "modlens",
+    "repo": "liustack/modlens",
+    "category": "vision",
+    "stars": 1981,
+    "desc": "DSH 视觉插件：粘贴图片得到结构化 JSON 证据（OCR、版面、语义），给纯文本模型外挂眼睛。"
+  },
+  {
+    "name": "dsh-better-sidebar",
+    "repo": "omdsh-dev/DSH-better-sidebar",
+    "category": "ui",
+    "stars": 1328,
+    "desc": "侧边栏完整工作台：文件渲染编辑 / 终端 / Git / 子代理，支持三方拓展注册新侧边栏页面。"
+  },
+  {
+    "name": "dsh-TUI",
+    "repo": "ccch1mneyyy/dsh-TUI",
+    "category": "ui",
+    "stars": 1307,
+    "desc": "Claude Code 风格 TUI：鲸鱼顶栏、实时状态、流式思考、双击 Esc 回滚、上下文进度 + TPS。"
+  },
+  {
+    "name": "dsh-vision-toolkit",
+    "repo": "Anionex/dsh-vision-toolkit",
+    "category": "vision",
+    "stars": 445,
+    "desc": "视觉任务全家桶：带意图图片问答、长截图 OCR、UI 还原、grounding、像素 diff、Artifacts、Web UI。"
+  },
+  {
+    "name": "dsh-agent-teams",
+    "repo": "NanmiCoder/dsh-agent-teams",
+    "category": "agent",
+    "stars": 344,
+    "desc": "多 Agent 团队协作：队长/成员/任务依赖/消息，自然语言驱动。"
+  },
+  {
+    "name": "dsh-market",
+    "repo": "dsh-market/dsh-market",
+    "category": "market",
+    "stars": 322,
+    "desc": "DSH 内可视化插件市场：浏览、搜索、一键安装社区插件。",
+    "install": "local:dsh-market"
+  },
+  {
+    "name": "dsh-at-file",
+    "repo": "omdsh-dev/dsh-at-file",
+    "category": "ui",
+    "stars": 227,
+    "desc": "Codex 风格 @file 提及：搜索工作区文件并附加内容到 prompt。"
+  },
+  {
+    "name": "oh-dsh",
+    "repo": "hust-open-atom-club/oh-dsh",
+    "category": "runtime",
+    "stars": 196,
+    "desc": "一套 DSH runtime：Desktop、Web 与 TUI 三种开发体验。"
+  },
+  {
+    "name": "dsh-tianshu-tui",
+    "repo": "huiliyi37/dsh-tianshu-tui",
+    "category": "ui",
+    "stars": 175,
+    "desc": "终端 UI + harness workflow：TDD、证据门、视觉图像模块等工作流。"
+  },
+  {
+    "name": "dsh-browser",
+    "repo": "Lum1104/dsh-browser",
+    "category": "ui",
+    "stars": 168,
+    "desc": "Chrome 侧边栏扩展，让 DSH 直接操控浏览器，无需视觉能力。"
+  },
+  {
+    "name": "dsh-vision-router",
+    "repo": "ysr666/dsh-vision-router",
+    "category": "vision",
+    "stars": 164,
+    "desc": "内置免费视觉链 + 像素级视觉工具：Q&A、grounding、crop、pixel diff、OCR、SVG trace。"
+  },
+  {
+    "name": "dsh-visualize",
+    "repo": "Nagi-ovo/dsh-visualize",
+    "category": "ui",
+    "stars": 126,
+    "desc": "对话内生成交互式可视化卡片。"
+  },
+  {
+    "name": "dsh-genui",
+    "repo": "omdsh-dev/dsh-genui",
+    "category": "ui",
+    "stars": 113,
+    "desc": "回复内联渲染交互 UI：布局、图表、表单、mermaid、3D 场景 + 事件回环。"
+  },
+  {
+    "name": "modsearch",
+    "repo": "liustack/modsearch",
+    "category": "search",
+    "stars": 105,
+    "desc": "DSH 网页/X 搜索插件：问网页或 X，拿结构化 JSON 证据。"
+  },
+  {
+    "name": "dsh-memory-evolve",
+    "repo": "csyangwen/dsh-memory-evolve",
+    "category": "memory",
+    "stars": 93,
+    "desc": "跨会话长期记忆 + 后台自我进化：五轨记忆、git 分支感知、技能自我进化。"
+  },
+  {
+    "name": "dsh-noema",
+    "repo": "ZSeven-W/dsh-noema",
+    "category": "memory",
+    "stars": 61,
+    "desc": "Noema 长期记忆：可检查的持久记忆、召回工具与设置页。"
+  },
+  {
+    "name": "dsh-auto-mode",
+    "repo": "NanmiCoder/dsh-auto-mode",
+    "category": "agent",
+    "stars": 60,
+    "desc": "安全自动权限策略：fail-closed，避免危险操作。"
+  },
+  {
+    "name": "dsh-turn-rewind",
+    "repo": "Anionex/dsh-turn-rewind",
+    "category": "agent",
+    "stars": 56,
+    "desc": "对话与代码状态回退，基于持久 Change Ledger。"
+  },
+  {
+    "name": "dsh-notification",
+    "repo": "omdsh-dev/dsh-notification",
+    "category": "ui",
+    "stars": 49,
+    "desc": "回合完成桌面通知，支持结果分类与关键词规则。"
+  },
+  {
+    "name": "anysearch-dsh",
+    "repo": "anysearch-team/anysearch-dsh",
+    "category": "search",
+    "stars": 48,
+    "desc": "AnySearch 搜索提供商与高级搜索工具。"
+  },
+  {
+    "name": "mstar-harness",
+    "repo": "btspoony/mstar-harness",
+    "category": "agent",
+    "stars": 45,
+    "desc": "Harness Workflow Engine：技能驱动的 Harness/Loop 工程工作流 Agent 插件。"
+  },
+  {
+    "name": "dsh-automation",
+    "repo": "titanwings/dsh-automation",
+    "category": "agent",
+    "stars": 42,
+    "desc": "定时在全新 Agent Session 中运行 Coding 任务，支持计划管理。"
+  },
+  {
+    "name": "dsh-qqbot",
+    "repo": "tencent-connect/dsh-qqbot",
+    "category": "im",
+    "stars": 40,
+    "desc": "QQ 机器人接入 DSH 的官方插件。"
+  },
+  {
+    "name": "dsh-mnemon",
+    "repo": "omdsh-dev/dsh-mnemon",
+    "category": "memory",
+    "stars": 33,
+    "desc": "跨 Agent 本地优先持久记忆：Mnemon 驱动，支持知识图谱与 Sidebar UI。"
+  },
+  {
+    "name": "dsh-data-agent",
+    "repo": "omdsh-dev/dsh-data-agent",
+    "category": "data",
+    "stars": 27,
+    "desc": "会话级数据库连接：写 SQL 并基于实时执行反馈迭代。"
+  },
+  {
+    "name": "dsh-handbook",
+    "repo": "Electricitysheep/dsh-handbook",
+    "category": "docs",
+    "stars": 300,
+    "desc": "DSH 从 0 到 1 深度手册：安装、插件开发、性能调优、实测案例。"
+  },
+  {
+    "name": "Oh-My-DSH",
+    "repo": "like-study1/Oh-My-DSH",
+    "category": "catalog",
+    "stars": 37,
+    "desc": "DSH 插件聚合社区/完整目录：自动同步 dsh-plugin 生态，收录 1200+ 精选条目。"
+  },
+  {
+    "name": "awesome-dsh-plugin",
+    "repo": "bruc3van/awesome-dsh-plugin",
+    "category": "catalog",
+    "stars": 152,
+    "desc": "DSH 插件精选目录与 Star 排行榜（TOP200）。"
+  }
+]

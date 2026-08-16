@@ -1,0 +1,122 @@
+diff --git a/src/index.ts b/src/index.ts
+index ca084f7..5c1b80c 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -10,7 +10,7 @@ import { mountMarketRoutes, type MarketConfig, type MarketHost } from './routes.
+ export const name = 'dsh-market'
+ 
+ /** Optional cordis.yml configuration; profile defaults to `web`. */
+-export type Config = Partial<Pick<MarketConfig, 'profile' | 'allowRestart'>>
++export type Config = Partial<Pick<MarketConfig, 'profile' | 'allowRestart' | 'autoUpdate' | 'autoUpdateIntervalMs'>>
+ 
+ /** Structural subset of DSH Desktop's public `desktopProfiles` contract. */
+ interface DesktopProfilesLike {
+@@ -52,6 +52,8 @@ export function apply(ctx: Context, config?: Config): void {
+       const resolved: MarketConfig = {
+         profile: config?.profile ?? argvProfile() ?? 'web',
+         allowRestart: config?.allowRestart ?? true,
++        autoUpdate: config?.autoUpdate ?? true,
++        autoUpdateIntervalMs: config?.autoUpdateIntervalMs,
+       }
+       host.effect(() => mountMarketRoutes(host, resolved), 'dsh-market: http routes')
+       return
+@@ -72,6 +74,8 @@ export function apply(ctx: Context, config?: Config): void {
+         // Relaunching a raw Electron process would bypass Desktop's launcher
+         // lifecycle. The shell remains responsible for restart in this mode.
+         allowRestart: false,
++        autoUpdate: config?.autoUpdate ?? true,
++        autoUpdateIntervalMs: config?.autoUpdateIntervalMs,
+       }
+       const desktopHost = desktopCtx as unknown as MarketEffectHost
+       desktopHost.effect(() => {
+diff --git a/src/routes.ts b/src/routes.ts
+index e543538..1508bcb 100644
+--- a/src/routes.ts
++++ b/src/routes.ts
+@@ -59,6 +59,10 @@ export interface MarketConfig {
+   profileDirectory?: string
+   /** Detached self-restart is unsafe under systemd/launchd/pm2; operators can disable it (#14). */
+   allowRestart?: boolean
++  /** Automatically check for and upgrade installed plugins on an interval. Defaults to true. */
++  autoUpdate?: boolean
++  /** Interval between automatic update checks in milliseconds. Defaults to 6 hours. */
++  autoUpdateIntervalMs?: number
+ }
+ 
+ const PROFILE_RE = /^[A-Za-z0-9_-]+$/
+@@ -126,6 +130,7 @@ export function mountMarketRoutes(
+   })
+   let installing = false
+   let restarting = false
++  let autoUpdating = false
+ 
+   /** Dependency diff vs. a pre-operation snapshot (cancel aftermath). */
+   function changedSince(before: Record<string, string>): { changed: string[]; partial: boolean } {
+@@ -167,6 +172,45 @@ export function mountMarketRoutes(
+   /** Every plugin command goes through the pnpm-drift recovery wrapper (#20). */
+   const runPlugin = (profile: string, args: string[]) => withHoistRecovery(commands.runPlugin, profile, args)
+ 
++  /**
++   * Automatic upgrade pass: check every installed plugin for a newer release
++   * and upgrade the ones that have one. Runs on an interval so the market
++   * keeps itself and the installed plugin set fresh without user interaction.
++   */
++  async function runAutoUpdate(): Promise<void> {
++    if (installing || restarting || autoUpdating) return
++    autoUpdating = true
++    try {
++      const updates = await checkUpdates(config.profile, true, activeProfileDir)
++      const installed = readInstalled(config.profile, activeProfileDir)
++      const targets = Object.entries(updates).filter(([, status]) => status.updateAvailable)
++      if (targets.length === 0) return
++      logEvent('info', 'auto-update', `found ${targets.length} updatable plugin(s): ${targets.map(([name]) => name).join(', ')}`)
++      for (const [name, status] of targets) {
++        if (installing || restarting) break
++        const spec = installed[name]
++        if (spec === undefined || spec.startsWith('link:') || spec.startsWith('file:')) continue
++        const isGit = spec.startsWith('github:')
++        const target = isGit ? spec.replace(/#.*$/, '') : `${name}@latest`
++        // Force bypasses the one-day fresh-release safety wait; auto-update is
++        // opt-in via config and the user asked for automatic upgrades.
++        const result = await runPlugin(config.profile, ['add', RELEASE_AGE_OVERRIDE, target])
++        if (result.exitCode === 0 && !result.timedOut && !result.cancelled) {
++          invalidateUpdates()
++          logEvent('info', 'auto-update', `${name}: upgraded -> ${target} (${status.current ?? '?'} -> ${status.latest ?? '?'})`)
++        } else {
++          logEvent('warn', 'auto-update', `${name}: upgrade failed exit=${String(result.exitCode)}${result.timedOut ? ' TIMEOUT' : ''}${result.cancelled ? ' CANCELLED' : ''} stderr=${String(result.stderr).slice(-200)}`)
++        }
++      }
++    } catch (error) {
++      const message = error instanceof Error ? error.message : String(error)
++      host.logger?.warn(`[dsh-market] auto-update failed: ${message}`)
++      logEvent('error', 'auto-update', message)
++    } finally {
++      autoUpdating = false
++    }
++  }
++
+   async function restoreBackup(value: unknown): Promise<{ files: number; errors: { name: string; error: string }[] }> {
+     if (installing) throw new Error('another plugin operation is already running')
+     if (!await probePnpm()) throw new Error('pnpm is required to restore plugins')
+@@ -1057,7 +1101,21 @@ export function mountMarketRoutes(
+     }),
+   ]
+ 
++  const autoUpdateEnabled = config.autoUpdate ?? true
++  const autoUpdateIntervalMs = config.autoUpdateIntervalMs ?? 6 * 60 * 60 * 1000
++  let autoBootTimer: ReturnType<typeof setTimeout> | undefined
++  let autoTimer: ReturnType<typeof setInterval> | undefined
++  if (autoUpdateEnabled) {
++    // First pass shortly after boot (give the profile time to settle), then
++    // repeat on the configured interval.
++    autoBootTimer = setTimeout(() => { void runAutoUpdate() }, 5 * 60 * 1000)
++    autoTimer = setInterval(() => { void runAutoUpdate() }, autoUpdateIntervalMs)
++    logEvent('info', 'auto-update', `auto-update enabled: first check in 5m, then every ${Math.round(autoUpdateIntervalMs / 60_000)}m`)
++  }
++
+   return () => {
++    if (autoBootTimer !== undefined) clearTimeout(autoBootTimer)
++    if (autoTimer !== undefined) clearInterval(autoTimer)
+     for (const dispose of disposers) dispose()
+   }
+ }
