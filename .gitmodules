@@ -7,3 +7,7 @@
 [submodule "mode-boost"]
 	path = mode-boost
 	url = https://github.com/yjh051108/dsh-mode-boost.git
+[submodule "catalog/oh-my-dsh"]
+	path = catalog/oh-my-dsh
+	url = https://github.com/like-study1/Oh-My-DSH.git
+	branch = main

@@ -8,12 +8,15 @@
 ## 安装链（三步）
 
 ```powershell
-# 1. 拉套装（含两个 submodule）
+# 1. 拉套装（含核心 submodule + Oh-My-DSH 插件目录）
 git clone --recurse-submodules https://github.com/yjh051108/dsh-routing-suite.git
 cd dsh-routing-suite
 
 # 2. 一键安装（注入器装配 + 预设复制 + 提示重启）
 .\install.ps1
+
+# 可选：安装精选高星 DSH 插件
+.\plugins\install.ps1
 ```
 
 或手动：
@@ -34,12 +37,14 @@ Copy-Item -Recurse .\preset\preset $target
 | 路径 | 仓库 | 版本 | 作用 |
 |---|---|---|---|
 | `injector/` | [dsh-super-injector](https://github.com/yjh051108/dsh-super-injector) | [v0.3.3](https://github.com/yjh051108/dsh-super-injector/releases/tag/v0.3.3) | 运行时注入器：dev_* 工具全家桶（注入/热重载/侧挂转正/卸载/路由自愈） |
-| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [v0.3.0](https://github.com/yjh051108/dsh-router-standard/releases/tag/v0.3.0) | 思维模式路由预设：router-standard（RL 接口还原）/ router-spec（深度思考优先）/ router-pro（Pro 测量最优） |
+| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [main](https://github.com/yjh051108/dsh-router-standard)（v0.2.0 + 2026-08-16 勘误） | 思维模式路由预设：router-standard（RL 接口还原）/ router-spec（深度思考优先）；最新 main 含重要勘误与 Pro 方向更新 |
 | `mode-boost/` | [dsh-mode-boost](https://github.com/yjh051108/dsh-mode-boost) | [v0.1.0](https://github.com/yjh051108/dsh-mode-boost/releases/tag/v0.1.0) | 模式提升插件：deep-persona 收敛提升 / boost 重分类引导 / 深度自适应分派（宿主平面，装配在官方 preset 之上） |
+| `catalog/oh-my-dsh/` | [Oh-My-DSH](https://github.com/like-study1/Oh-My-DSH) | main（自动同步） | DSH 插件聚合社区/完整目录：1200+ 精选条目，自动同步 dsh-plugin 生态 |
+| `plugins/` | 本仓库精选 | — | 高星 DSH 插件精选清单（`popular.json`）+ 一键安装器（`install.ps1`） |
 
-> 版本号以各组件仓库的 git tag 为准（列内链接直达对应 Release）。
+> 版本号以各组件仓库的 git tag / main 为准（列内链接直达对应仓库或 Release）。
 
-三个组件独立演进（submodule 指向各自 main），套装聚合安装链与总览。
+核心组件独立演进（submodule 指向各自 main），套装聚合安装链、插件目录与精选清单。
 
 ## router-standard 预设能力（P1-P23 实测摘要）
 
@@ -49,6 +54,16 @@ Copy-Item -Recurse .\preset\preset $target
 - **单任务三锚**（persona 静态）：回顾 + 收敛 + 反跑题 —— 开放任务完成率 0% → 100%
 - **plan-mode 保留**：只替换 persona section，plan 边界不失忆
 - **AI 自优化工具**：`dev_router_status` / `dev_router_mode` / `dev_mode_subagent`
+
+## 生态融合：高星插件 + 完整聚合目录
+
+- **完整目录**：`catalog/oh-my-dsh/` 是 [Oh-My-DSH](https://github.com/like-study1/Oh-My-DSH)
+  聚合社区子模块，自动同步 `dsh-plugin` 生态 1200+ 精选条目，入口见
+  [`catalog/oh-my-dsh/PLUGINS.md`](catalog/oh-my-dsh/PLUGINS.md)。
+- **高星精选**：`plugins/` 收录 GitHub 上 Star 靠前且真正面向 DSH 的插件，
+  含机器可读清单 `popular.json` 与一键安装器 `install.ps1`，入口见
+  [`plugins/README.md`](plugins/README.md)。
+
 
 ## 文档
 
