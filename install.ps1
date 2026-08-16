@@ -1,5 +1,5 @@
 # dsh-routing-suite 一键安装（Windows PowerShell）
-# 步骤：1) 装配注入器  2) 安装 router-standard 预设  3) 提示重启
+# 步骤：1) 装配注入器  2) 安装 router-standard 预设  3) 装配 mode-boost（可选）  4) 提示重启
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
@@ -18,11 +18,20 @@ if (Test-Path $target) {
   Write-Host "预设已存在：$target（如需覆盖请先手动删除）" -ForegroundColor Yellow
 } else {
   New-Item -ItemType Directory -Force -Path (Split-Path $target) | Out-Null
-  Copy-Item -Recurse (Join-Path $root 'preset\preset') $target
+  Copy-Item -Recurse (Join-Path $root 'preset\preset\router-standard') $target
   Write-Host "预设已安装：$target" -ForegroundColor Green
 }
 
-Write-Host '=== [3/3] 完成 ===' -ForegroundColor Cyan
+Write-Host '=== [3/3] 装配 mode-boost（可选） ===' -ForegroundColor Cyan
+$modeBoost = Join-Path $root 'mode-boost'
+if (-not (Test-Path (Join-Path $modeBoost 'lib\index.js'))) {
+  Write-Host 'mode-boost/lib 缺失——先构建：cd mode-boost; bash scripts/build.sh；如不需要可跳过' -ForegroundColor Yellow
+} else {
+  & dsh plugin --profile web add $modeBoost 2>&1 | Out-Host
+  Write-Host 'mode-boost 已装配（重启后由 bundles 接管）' -ForegroundColor Green
+}
+
+Write-Host '=== 完成 ===' -ForegroundColor Cyan
 Write-Host '1. 重启 DSH（web 服务）' -ForegroundColor Yellow
 Write-Host '2. GUI 新建会话 → 选择 Router Standard (experimental)' -ForegroundColor Yellow
 Write-Host '3. 发任务：生成任务自动 react，维护任务自动 spec，模糊任务进 weak 内路由' -ForegroundColor Yellow

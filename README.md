@@ -1,60 +1,51 @@
 # dsh-routing-suite — 注入器 × 思维模式路由 套装
-
 一个仓库装齐「运行时手术台 + 思维模式路由预设」：先装注入器（免重启运行时管理层），
 再用它装配 router-standard 预设（任务感知思维模式路由，P1-P23 实测）。
-
 [中文](README.md) | [English](README.en.md)
-
 ## 安装链（三步）
-
 ```powershell
-# 1. 拉套装（含两个 submodule）
+# 1. 拉套装（含三个 submodule）
 git clone --recurse-submodules https://github.com/yjh051108/dsh-routing-suite.git
 cd dsh-routing-suite
-
-# 2. 一键安装（注入器装配 + 预设复制 + 提示重启）
+# 2. 一键安装（注入器装配 + 预设复制 + mode-boost 可选 + 提示重启）
 .\install.ps1
 ```
-
 或手动：
-
 ```powershell
 # 步骤 1：装配注入器（官方装配，重启后由 bundles 接管）
 dsh plugin --profile web add .\injector
 
-# 步骤 2：安装 router-standard 预设
+# 步骤 2：安装 router-standard 预设（注意复制的是 preset/preset/router-standard）
 $target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-standard'
-Copy-Item -Recurse .\preset\preset $target
+Copy-Item -Recurse .\preset\preset\router-standard $target
 
-# 步骤 3：重启 DSH → 新会话选择 Router Standard (experimental)
+# 步骤 2b（可选）：安装 router-spec 预设
+$target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-spec'
+Copy-Item -Recurse .\preset\preset\router-spec $target
+
+# 步骤 3（可选）：装配 mode-boost 插件
+dsh plugin --profile web add .\mode-boost
+
+# 步骤 4：重启 DSH → 新会话选择 Router Standard (experimental)
 ```
-
 ## 组件
-
 | 路径 | 仓库 | 版本 | 作用 |
 |---|---|---|---|
 | `injector/` | [dsh-super-injector](https://github.com/yjh051108/dsh-super-injector) | [v0.3.3](https://github.com/yjh051108/dsh-super-injector/releases/tag/v0.3.3) | 运行时注入器：dev_* 工具全家桶（注入/热重载/侧挂转正/卸载/路由自愈） |
-| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [v0.3.0](https://github.com/yjh051108/dsh-router-standard/releases/tag/v0.3.0) | 思维模式路由预设：router-standard（RL 接口还原）/ router-spec（深度思考优先）/ router-pro（Pro 测量最优） |
-| `mode-boost/` | [dsh-mode-boost](https://github.com/yjh051108/dsh-mode-boost) | [v0.1.0](https://github.com/yjh051108/dsh-mode-boost/releases/tag/v0.1.0) | 模式提升插件：deep-persona 收敛提升 / boost 重分类引导 / 深度自适应分派（宿主平面，装配在官方 preset 之上） |
-
+| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [v0.2.0](https://github.com/yjh051108/dsh-router-standard/releases/tag/v0.2.0) | 思维模式路由预设：router-standard（RL 接口还原）/ router-spec（深度思考优先） |
+| `mode-boost/` | [dsh-mode-boost](https://github.com/yjh051108/dsh-mode-boost) | [v0.1.0](https://github.com/yjh051108/dsh-mode-boost/releases/tag/v0.1.0) | 模式提升插件：deep-persona 收敛提升 / boost 重分类引导 / 深度自适应分派（宿主平面，装配在官方 preset 之上，可选） |
 > 版本号以各组件仓库的 git tag 为准（列内链接直达对应 Release）。
-
-三个组件独立演进（submodule 指向各自 main），套装聚合安装链与总览。
-
+> 当前套装 main 锁定的 preset 为 v0.2.0（router-standard / router-spec）；router-pro 尚未包含在套装内。
+三个组件独立演进（submodule 指向各自仓库的提交），套装聚合安装链与总览。
 ## router-standard 预设能力（P1-P23 实测摘要）
-
 - **三行为带 + weak 内路由**：spec（计划-集体）/ react（执行者）/ mixed（陷阱，回避）/ weak（模型自分类）
 - **按模型选 persona**：Pro=spec 句+few-shot（区分度 +5.0）；Flash=neutral+classify（+5.7）
 - **近距离引导**：每轮用户消息后注入固定引导（缓存 92-94% 命中），路由 96% + 收敛 100% + 反稀释
 - **单任务三锚**（persona 静态）：回顾 + 收敛 + 反跑题 —— 开放任务完成率 0% → 100%
 - **plan-mode 保留**：只替换 persona section，plan 边界不失忆
 - **AI 自优化工具**：`dev_router_status` / `dev_router_mode` / `dev_mode_subagent`
-
 ## 文档
-
 - 注入器引导（规范铁律 10 条）：`injector/README.md`
 - 路由预设论文与实验：`preset/docs/paper.md` + `preset/docs/experiments.md`（P1-P23）
-
 ## 许可证
-
 MIT。致谢：xiaobright/modeltest（V4.1b 评测）、xiaobright/dsh-anchored-standard（锚定机制）。
