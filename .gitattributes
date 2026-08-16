@@ -1,0 +1,4 @@
+# Shell scripts must stay LF: CRLF breaks bash ("set -o pipefail" fails
+# with "invalid option name" because of the trailing \r), and Windows
+# checkouts with core.autocrlf=true would otherwise convert them.
+*.sh text eol=lf
