@@ -46,7 +46,8 @@
     "repo": "dsh-market/dsh-market",
     "category": "market",
     "stars": 322,
-    "desc": "DSH 内可视化插件市场：浏览、搜索、一键安装社区插件。"
+    "desc": "DSH 内可视化插件市场：浏览、搜索、一键安装社区插件。",
+    "install": "dshmarket"
   },
   {
     "name": "dsh-at-file",

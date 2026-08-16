@@ -11,3 +11,7 @@
 	path = catalog/oh-my-dsh
 	url = https://github.com/like-study1/Oh-My-DSH.git
 	branch = main
+[submodule "market/dsh-market"]
+	path = market/dsh-market
+	url = https://github.com/dsh-market/dsh-market.git
+	branch = main

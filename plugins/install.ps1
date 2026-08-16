@@ -46,7 +46,7 @@ if ($Name.Count -gt 0) {
 Write-Host "=== 将安装 $($selected.Count) 个精选插件到 profile '$Profile' ===" -ForegroundColor Cyan
 $ok = 0; $fail = 0
 foreach ($p in ($selected | Sort-Object Stars -Descending)) {
-  $target = "github:$($p.repo)"
+  $target = if ($p.install) { $p.install } else { "github:$($p.repo)" }
   Write-Host "==> $($p.name) [$($p.stars)★] $target" -ForegroundColor Green
   if ($DryRun) { continue }
   & dsh plugin --profile $Profile add $target 2>&1 | Out-Host

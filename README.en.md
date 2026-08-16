@@ -14,7 +14,7 @@ plugin** (measured performance lifts on top of official presets).
 git clone --recurse-submodules https://github.com/yjh051108/dsh-routing-suite.git
 cd dsh-routing-suite
 
-# 2. One-shot install (injector assembly + preset copy + restart prompt)
+# 2. One-shot install (injector assembly + preset copy + dsh-market plugin market + restart prompt)
 .\install.ps1
 
 # Optional: install curated high-star DSH plugins
@@ -45,6 +45,7 @@ Copy-Item -Recurse .\preset\preset\router-spec $target
 | `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [main](https://github.com/yjh051108/dsh-router-standard) (v0.2.0 + 2026-08-16 corrections) | Reasoning-mode routing presets: router-standard (RL-interface restoration) / router-spec (deep-think-first); latest main includes the important correction notice and Pro direction updates |
 | `mode-boost/` | [dsh-mode-boost](https://github.com/yjh051108/dsh-mode-boost) | [v0.1.0](https://github.com/yjh051108/dsh-mode-boost/releases/tag/v0.1.0) | Mode-boost plugin: deep-persona convergence lift / boost reclassification guidance / depth-adaptive dispatch (host-plane, mounts on top of official presets) |
 | `catalog/oh-my-dsh/` | [Oh-My-DSH](https://github.com/like-study1/Oh-My-DSH) | main (auto-synced) | DSH plugin aggregator / complete catalog: 1200+ curated entries, auto-synced from the dsh-plugin topic |
+| `market/dsh-market/` | [dsh-market](https://github.com/dsh-market/dsh-market) | main | Built-in DSH plugin market: Settings → Plugin Market, browse/search/one-click install |
 | `plugins/` | curated in this repo | — | High-star DSH plugin picks (`popular.json`) + one-click installer (`install.ps1`) |
 
 > Versions follow each component repo's git tag / main (links go to the matching repo or Release).
@@ -61,8 +62,11 @@ The core components evolve independently (submodules point at each repo's
 - **plan-mode preserved**: only the persona section is replaced; plan boundaries never lose focus
 - **AI self-optimization tools**: `dev_router_status` / `dev_router_mode` / `dev_mode_subagent`
 
-## Ecosystem integration: high-star plugins + full catalog
+## Ecosystem integration: plugin market + high-star picks + full catalog
 
+- **Built-in plugin market**: `market/dsh-market/` is the [dsh-market](https://github.com/dsh-market/dsh-market)
+  submodule. After install, open **Settings → Plugin Market** to browse, search,
+  and click-to-install community plugins. One-liner: `dsh plugin --profile web add dshmarket`.
 - **Full catalog**: `catalog/oh-my-dsh/` is the [Oh-My-DSH](https://github.com/like-study1/Oh-My-DSH)
   aggregator submodule, auto-syncing 1200+ curated entries from the `dsh-plugin`
   topic — start at [`catalog/oh-my-dsh/PLUGINS.md`](catalog/oh-my-dsh/PLUGINS.md).

@@ -1,5 +1,9 @@
 # 高星插件精选（DSH Plugin Picks）
 
+> 💡 **想在 DSH 界面里直接浏览、搜索、点击安装？** 先装内置插件市场：
+> `dsh plugin --profile web add dshmarket`，然后打开 **设置 → 插件市场**。
+> 市场源码已作为子模块接入本仓库：`../market/dsh-market`。
+
 这个目录把 GitHub 上 **Star 靠前且真正面向 DeepSeek Harness（DSH）生态**的插件聚合进
 `dsh-routing-suite`，方便一站式发现和安装。
 
