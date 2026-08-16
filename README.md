@@ -40,7 +40,7 @@ Copy-Item -Recurse .\preset\preset $target
 | `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [main](https://github.com/yjh051108/dsh-router-standard)（v0.2.0 + 2026-08-16 勘误） | 思维模式路由预设：router-standard（RL 接口还原）/ router-spec（深度思考优先）；最新 main 含重要勘误与 Pro 方向更新 |
 | `mode-boost/` | [dsh-mode-boost](https://github.com/yjh051108/dsh-mode-boost) | [v0.1.0](https://github.com/yjh051108/dsh-mode-boost/releases/tag/v0.1.0) | 模式提升插件：deep-persona 收敛提升 / boost 重分类引导 / 深度自适应分派（宿主平面，装配在官方 preset 之上） |
 | `catalog/oh-my-dsh/` | [Oh-My-DSH](https://github.com/like-study1/Oh-My-DSH) | main（自动同步） | DSH 插件聚合社区/完整目录：1200+ 精选条目，自动同步 dsh-plugin 生态 |
-| `market/dsh-market/` | [dsh-market](https://github.com/dsh-market/dsh-market) | main | DSH 内置插件市场：设置 → 插件市场，浏览/搜索/一键安装社区插件 |
+| `market/dsh-market/` | [dsh-market](https://github.com/dsh-market/dsh-market) | main + 自动更新补丁 | DSH 内置插件市场：设置 → 插件市场，浏览/搜索/一键安装；自动检查并升级已装插件（补丁见 `patches/dsh-market-auto-update.patch`） |
 | `plugins/` | 本仓库精选 | — | 高星 DSH 插件精选清单（`popular.json`）+ 一键安装器（`install.ps1`） |
 
 > 版本号以各组件仓库的 git tag / main 为准（列内链接直达对应仓库或 Release）。
@@ -59,8 +59,9 @@ Copy-Item -Recurse .\preset\preset $target
 ## 生态融合：插件市场 + 高星插件 + 完整聚合目录
 
 - **内置插件市场**：`market/dsh-market/` 是 [dsh-market](https://github.com/dsh-market/dsh-market)
-  子模块。安装后打开 **设置 → 插件市场**，即可浏览/搜索/点击直接安装社区插件。
-  一键安装：`dsh plugin --profile web add dshmarket`。
+  子模块 + `patches/dsh-market-auto-update.patch` 自动更新补丁。安装后打开 **设置 → 插件市场**，
+  即可浏览/搜索/点击直接安装社区插件；并会自动检查已装插件的新版本，按间隔自动升级。
+  一键安装（含自动更新）：`.\install.ps1`；官方原版（无自动更新）：`dsh plugin --profile web add dshmarket`。
 - **完整目录**：`catalog/oh-my-dsh/` 是 [Oh-My-DSH](https://github.com/like-study1/Oh-My-DSH)
   聚合社区子模块，自动同步 `dsh-plugin` 生态 1200+ 精选条目，入口见
   [`catalog/oh-my-dsh/PLUGINS.md`](catalog/oh-my-dsh/PLUGINS.md)。

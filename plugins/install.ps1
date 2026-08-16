@@ -46,6 +46,10 @@ if ($Name.Count -gt 0) {
 Write-Host "=== 将安装 $($selected.Count) 个精选插件到 profile '$Profile' ===" -ForegroundColor Cyan
 $ok = 0; $fail = 0
 foreach ($p in ($selected | Sort-Object Stars -Descending)) {
+  if ($p.install -eq 'local:dsh-market') {
+    Write-Host "==> $($p.name) [$($p.stars)★] 由根目录 install.ps1 安装本地增强版（含自动更新），跳过" -ForegroundColor Yellow
+    continue
+  }
   $target = if ($p.install) { $p.install } else { "github:$($p.repo)" }
   Write-Host "==> $($p.name) [$($p.stars)★] $target" -ForegroundColor Green
   if ($DryRun) { continue }

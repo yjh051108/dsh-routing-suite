@@ -45,7 +45,7 @@ Copy-Item -Recurse .\preset\preset\router-spec $target
 | `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [main](https://github.com/yjh051108/dsh-router-standard) (v0.2.0 + 2026-08-16 corrections) | Reasoning-mode routing presets: router-standard (RL-interface restoration) / router-spec (deep-think-first); latest main includes the important correction notice and Pro direction updates |
 | `mode-boost/` | [dsh-mode-boost](https://github.com/yjh051108/dsh-mode-boost) | [v0.1.0](https://github.com/yjh051108/dsh-mode-boost/releases/tag/v0.1.0) | Mode-boost plugin: deep-persona convergence lift / boost reclassification guidance / depth-adaptive dispatch (host-plane, mounts on top of official presets) |
 | `catalog/oh-my-dsh/` | [Oh-My-DSH](https://github.com/like-study1/Oh-My-DSH) | main (auto-synced) | DSH plugin aggregator / complete catalog: 1200+ curated entries, auto-synced from the dsh-plugin topic |
-| `market/dsh-market/` | [dsh-market](https://github.com/dsh-market/dsh-market) | main | Built-in DSH plugin market: Settings → Plugin Market, browse/search/one-click install |
+| `market/dsh-market/` | [dsh-market](https://github.com/dsh-market/dsh-market) | main + auto-update patch | Built-in DSH plugin market: Settings → Plugin Market, browse/search/one-click install; auto-checks and upgrades installed plugins (patch in `patches/dsh-market-auto-update.patch`) |
 | `plugins/` | curated in this repo | — | High-star DSH plugin picks (`popular.json`) + one-click installer (`install.ps1`) |
 
 > Versions follow each component repo's git tag / main (links go to the matching repo or Release).
@@ -65,8 +65,10 @@ The core components evolve independently (submodules point at each repo's
 ## Ecosystem integration: plugin market + high-star picks + full catalog
 
 - **Built-in plugin market**: `market/dsh-market/` is the [dsh-market](https://github.com/dsh-market/dsh-market)
-  submodule. After install, open **Settings → Plugin Market** to browse, search,
-  and click-to-install community plugins. One-liner: `dsh plugin --profile web add dshmarket`.
+  submodule plus the `patches/dsh-market-auto-update.patch` auto-update patch. After install,
+  open **Settings → Plugin Market** to browse, search, and click-to-install community plugins;
+  it also auto-checks installed plugins and upgrades them on an interval.
+  One-liner for the enhanced build: `.\install.ps1`; plain upstream: `dsh plugin --profile web add dshmarket`.
 - **Full catalog**: `catalog/oh-my-dsh/` is the [Oh-My-DSH](https://github.com/like-study1/Oh-My-DSH)
   aggregator submodule, auto-syncing 1200+ curated entries from the `dsh-plugin`
   topic — start at [`catalog/oh-my-dsh/PLUGINS.md`](catalog/oh-my-dsh/PLUGINS.md).
