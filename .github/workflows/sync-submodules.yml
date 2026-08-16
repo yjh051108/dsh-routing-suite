@@ -1,0 +1,29 @@
+name: sync-submodules
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Update submodules to latest main
+        run: |
+          git submodule update --remote --init
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git diff --quiet; then
+            echo 'No submodule changes'
+          else
+            git add .gitmodules injector preset mode-boost
+            git commit -m 'chore: sync submodules to latest main'
+            git push
+          fi
