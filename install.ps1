@@ -13,13 +13,21 @@ if (-not (Test-Path (Join-Path $injector 'lib\index.js'))) {
 }
 
 Write-Host '=== [2/3] 安装 router-standard 预设 ===' -ForegroundColor Cyan
-$target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-standard'
-if (Test-Path $target) {
-  Write-Host "预设已存在：$target（如需覆盖请先手动删除）" -ForegroundColor Yellow
-} else {
-  New-Item -ItemType Directory -Force -Path (Split-Path $target) | Out-Null
-  Copy-Item -Recurse (Join-Path $root 'preset\preset') $target
-  Write-Host "预设已安装：$target" -ForegroundColor Green
+$presetRoot = Join-Path $env:USERPROFILE '.dsh\.agent-presets'
+$installed = @()
+foreach ($name in @('router-standard', 'router-spec')) {
+  $target = Join-Path $presetRoot $name
+  if (Test-Path $target) {
+    Write-Host "预设已存在：$target（如需覆盖请先手动删除）" -ForegroundColor Yellow
+  } else {
+    New-Item -ItemType Directory -Force -Path $presetRoot | Out-Null
+    Copy-Item -Recurse (Join-Path $root "preset\preset\$name") $target
+    Write-Host "预设已安装：$target" -ForegroundColor Green
+    $installed += $name
+  }
+}
+if ($installed.Count -eq 0) {
+  Write-Host '两个预设均已存在，跳过复制' -ForegroundColor Yellow
 }
 
 Write-Host '=== [3/3] 完成 ===' -ForegroundColor Cyan
