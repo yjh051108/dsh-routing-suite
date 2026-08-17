@@ -13,8 +13,12 @@ git clone --recurse-submodules https://github.com/yjh051108/dsh-routing-suite.gi
 cd dsh-routing-suite
 
 # 2. 一键安装（注入器装配 + 预设复制 + 提示重启）
-.\install.ps1
+# -ExecutionPolicy Bypass 仅对此次 PowerShell 进程生效，不修改系统策略
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
+
+`install.ps1` 使用带 BOM 的 UTF-8 编码，以兼容含中文内容的 Windows PowerShell 5.1；
+PowerShell 7 用户也可以直接运行 `pwsh -File .\install.ps1`。
 
 或手动：
 
@@ -22,11 +26,14 @@ cd dsh-routing-suite
 # 步骤 1：装配注入器（官方装配，重启后由 bundles 接管）
 dsh plugin --profile web add .\injector
 
-# 步骤 2：安装 router-standard 预设
+# 步骤 2：安装路由预设
 $target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-standard'
-Copy-Item -Recurse .\preset\preset $target
+Copy-Item -Recurse .\preset\preset\router-standard $target
 
-# 步骤 3：重启 DSH → 新会话选择 Router Standard (experimental)
+$target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-spec'
+Copy-Item -Recurse .\preset\preset\router-spec $target
+
+# 步骤 3：重启 DSH → 新会话选择 Router Standard / Router Spec
 ```
 
 ## 组件

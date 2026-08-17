@@ -15,8 +15,17 @@ git clone --recurse-submodules https://github.com/yjh051108/dsh-routing-suite.gi
 cd dsh-routing-suite
 
 # 2. One-shot install (injector assembly + preset copy + restart prompt)
-.\install.ps1
+# -ExecutionPolicy Bypass applies only to this PowerShell process; it does not change the system policy
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\install.ps1
 ```
+
+`install.ps1` is encoded as UTF-8 with BOM for compatibility with Windows
+PowerShell 5.1 when the script contains non-ASCII text. PowerShell 7 users can
+also run `pwsh -File .\install.ps1` directly.
+
+The one-shot installer stops with an actionable error if `dsh` is unavailable
+or `injector/lib/index.js` has not been built. It reports completion only after
+the injector and both routing presets have been installed successfully.
 
 Or manually:
 
