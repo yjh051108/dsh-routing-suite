@@ -5,7 +5,7 @@ restart-free plugin management) plus the **reasoning-mode routing presets**
 (dsh-router-standard: task-aware reasoning-mode routing) and the **mode-boost
 plugin** (measured performance lifts on top of official presets).
 
-[中文](README.md) | English
+[中文](README.md) | English | [日本語](README.ja.md)
 
 ## Install chain (three steps)
 
