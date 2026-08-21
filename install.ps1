@@ -1,4 +1,4 @@
-# dsh-routing-suite 一键安装（Windows PowerShell）
+﻿# dsh-routing-suite 一键安装（Windows PowerShell）
 # 步骤：1) 装配注入器  2) 安装 router-standard / router-spec 预设  3) 提示重启
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -37,7 +37,7 @@ if (Test-Path (Join-Path $injector 'lib\index.js')) {
 }
 
 Write-Host '=== [2/3] 安装 router presets ===' -ForegroundColor Cyan
-$presetRoot = Join-Path $root 'preset'
+$presetRoot = Join-Path $root 'preset\preset'
 $presets = @('router-standard', 'router-spec')
 foreach ($name in $presets) {
   $target = Join-Path $env:USERPROFILE (Join-Path '.dsh\.agent-presets' $name)
