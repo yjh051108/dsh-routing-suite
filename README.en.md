@@ -4,7 +4,7 @@ One repository for the full stack: the **runtime surgery table** (dsh-super-inje
 restart-free plugin management) plus the **reasoning-mode routing presets**
 (dsh-router-standard: task-aware reasoning-mode routing).
 
-[中文](README.md) | English
+[中文](README.md) | English | [日本語](README.ja.md)
 
 ## Install chain (three steps)
 

@@ -3,7 +3,7 @@
 一个仓库装齐「运行时手术台 + 思维模式路由预设」：先装注入器（免重启运行时管理层），
 再用它装配 router-standard 预设（任务感知思维模式路由，P1-P23 实测）。
 
-[中文](README.md) | [English](README.en.md)
+[中文](README.md) | [English](README.en.md) | [日本語](README.ja.md)
 
 ## 安装链（三步）
 
