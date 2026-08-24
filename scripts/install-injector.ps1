@@ -1,4 +1,4 @@
-# install-injector.ps1 — dsh-super-injector 一次性安装脚本（装完即生效，无需手动重启）
+﻿# install-injector.ps1 — dsh-super-injector 一次性安装脚本（装完即生效，无需手动重启）
 #
 # 用法：
 #   .\install-injector.ps1                     # 装配 + 自动重启 DSH（默认）

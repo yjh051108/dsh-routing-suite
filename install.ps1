@@ -1,5 +1,5 @@
-# dsh-routing-suite 一键安装（Windows PowerShell）
-# 步骤：1) 装配注入器  2) 安装 router-standard / router-spec 预设  3) 提示重启
+﻿# dsh-routing-suite 一键安装（Windows PowerShell）
+# 步骤：1) 装配注入器  2) 安装 preset 官方路由预设  3) 提示重启
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
@@ -37,8 +37,23 @@ if (Test-Path (Join-Path $injector 'lib\index.js')) {
 }
 
 Write-Host '=== [2/3] 安装 router presets ===' -ForegroundColor Cyan
-$presetRoot = Join-Path $root 'preset'
-$presets = @('router-standard', 'router-spec')
+# dsh-router-standard 的官方布局是 preset/preset/...；兼容旧版根目录布局。
+$presetRoot = Join-Path $root 'preset\preset'
+if (-not (Test-Path (Join-Path $presetRoot 'router-standard'))) {
+  $presetRoot = Join-Path $root 'preset'
+}
+if (-not (Test-Path $presetRoot)) {
+  Write-Host "FAIL: 找不到预设源码目录：$presetRoot" -ForegroundColor Red
+  exit 1
+}
+$presets = @(Get-ChildItem $presetRoot -Directory |
+  Where-Object { Test-Path (Join-Path $_.FullName 'agent.cordis.yml') } |
+  Select-Object -ExpandProperty Name |
+  Sort-Object)
+if ($presets.Count -eq 0) {
+  Write-Host "FAIL: 预设目录下没有含 agent.cordis.yml 的预设：$presetRoot" -ForegroundColor Red
+  exit 1
+}
 foreach ($name in $presets) {
   $target = Join-Path $env:USERPROFILE (Join-Path '.dsh\.agent-presets' $name)
   if (Test-Path $target) {
@@ -51,7 +66,7 @@ foreach ($name in $presets) {
   Write-Host "预设已安装：$target" -ForegroundColor Green
 }
 
-# 自检：两个预设一级目录必须直接含 agent.cordis.yml（防嵌套层级错误）
+# 自检：所有已安装预设的一级目录必须直接含 agent.cordis.yml（防嵌套层级错误）
 Write-Host '=== 自检预设布局 ===' -ForegroundColor Cyan
 foreach ($name in $presets) {
   $check = Join-Path $env:USERPROFILE (Join-Path '.dsh\.agent-presets' (Join-Path $name 'agent.cordis.yml'))
@@ -64,6 +79,6 @@ foreach ($name in $presets) {
 
 Write-Host '=== [3/3] 完成 ===' -ForegroundColor Cyan
 Write-Host '1. 重启 DSH（web 服务）' -ForegroundColor Yellow
-Write-Host '2. GUI 新建会话 → 选择 Router Standard / Router Spec (experimental)' -ForegroundColor Yellow
+Write-Host '2. GUI 新建会话 → 选择 Router Standard / Router Spec / Router React' -ForegroundColor Yellow
 Write-Host '3. 发任务：生成任务自动 react，维护任务自动 spec，模糊任务进 weak 内路由' -ForegroundColor Yellow
 Write-Host '4. AI 自优化工具：dev_router_status / dev_router_mode / dev_mode_subagent' -ForegroundColor Yellow

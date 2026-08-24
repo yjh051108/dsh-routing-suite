@@ -1,7 +1,7 @@
 # dsh-routing-suite — 注入器 × 思维模式路由 套装
 
 一个仓库装齐「运行时手术台 + 思维模式路由预设」：先装注入器（免重启运行时管理层），
-再用它装配 router-standard 预设（任务感知思维模式路由，P1-P23 实测）。
+再用它装配 dsh-router-standard 官方预设（router-standard / router-spec / router-react）。
 
 [中文](README.md) | [English](README.en.md)
 
@@ -24,27 +24,35 @@ dsh plugin --profile web add .\injector
 # dsh 不在 PATH 时：npx '@deepseek-ai/dsh' plugin --profile web add .\injector
 
 # 步骤 2：安装 router 预设（每个预设目录平铺复制到 .agent-presets 下，DSH 只扫一级子目录）
+# preset submodule 的官方布局是 preset/preset/<preset-name>。
 $target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-standard'
-Copy-Item -Recurse .\preset\router-standard $target
+Copy-Item -Recurse .\preset\preset\router-standard $target
 
 $target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-spec'
-Copy-Item -Recurse .\preset\router-spec $target
+Copy-Item -Recurse .\preset\preset\router-spec $target
 
-# 步骤 3：重启 DSH → 新会话选择 Router Standard / Router Spec (experimental)
+$target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-react'
+Copy-Item -Recurse .\preset\preset\router-react $target
+
+# 步骤 3：重启 DSH → 新会话选择 Router Standard / Router Spec / Router React
 ```
 
-> 注意：不要复制 `preset` 整目录（会多套一层，DSH 发现不了预设）。
+> 注意：不要复制 `preset` 整目录（会多套一层，DSH 发现不了预设）；install.ps1 会自动识别
+> `preset/preset/` 与旧版 `preset/` 两种布局。
 
 ## 组件
 
 | 路径 | 仓库 | 版本 | 作用 |
 |---|---|---|---|
 | `injector/` | [dsh-super-injector](https://github.com/yjh051108/dsh-super-injector) | [v0.3.3](https://github.com/yjh051108/dsh-super-injector/releases/tag/v0.3.3) | 运行时注入器：dev_* 工具全家桶（注入/热重载/侧挂转正/卸载/路由自愈）；`github:` 装配由 prepare 钩子自动构建 |
-| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [v0.3.0](https://github.com/yjh051108/dsh-router-standard/releases/tag/v0.3.0) | 思维模式路由预设：router-standard（分类 persona + 完整 sections）/ router-spec（深度思考优先）。router-pro 为规划中（planned），未随 v0.3.0 发布 |
+| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [latest main](https://github.com/yjh051108/dsh-router-standard/tree/main) | 路由预设：router-standard（渐进披露 + 任务路由）/ router-spec（深度思考优先）/ router-react（RL 接口还原） |
 
-> 版本号以各组件仓库的 git tag 为准（列内链接直达对应 Release）。
+> submodule 指针即当前版本；有 Release tag 时组件仓库会另行发布。
 
 两个组件独立演进（submodule 指向各自 main），套装聚合安装链与总览。
+
+> 当前 preset submodule 已同步到 dsh-router-standard 的 main 研发线；下方 P1-P23 与
+> v0.3.0 变更保留为历史路由线摘要。
 
 ## router-standard 预设能力（P1-P23 实测摘要）
 

@@ -1,8 +1,8 @@
 # dsh-routing-suite — Injector × Reasoning-Mode Routing Suite
 
 One repository for the full stack: the **runtime surgery table** (dsh-super-injector,
-restart-free plugin management) plus the **reasoning-mode routing presets**
-(dsh-router-standard: task-aware reasoning-mode routing).
+restart-free plugin management) plus the **official routing presets from
+dsh-router-standard** (router-standard / router-spec / router-react).
 
 [中文](README.md) | English
 
@@ -24,31 +24,40 @@ Or manually:
 dsh plugin --profile web add .\injector
 # If dsh is not on PATH (npx @deepseek-ai/dsh web): npx '@deepseek-ai/dsh' plugin --profile web add .\injector
 
-# Step 2: install the router presets (one or both; DSH scans one level only,
+# Step 2: install the router presets (DSH scans one level only,
 # so each preset directory must sit FLAT under .agent-presets)
+# The preset submodule layout is preset/preset/<preset-name>.
 $target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-standard'
-Copy-Item -Recurse .\preset\router-standard $target
+Copy-Item -Recurse .\preset\preset\router-standard $target
 
 $target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-spec'
-Copy-Item -Recurse .\preset\router-spec $target
+Copy-Item -Recurse .\preset\preset\router-spec $target
 
-# Step 3: restart DSH → pick Router Standard / Router Spec in a new session
+$target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-react'
+Copy-Item -Recurse .\preset\preset\router-react $target
+
+# Step 3: restart DSH → pick Router Standard / Router Spec / Router React
 ```
 
 > Do NOT copy the `preset` directory as a whole — the extra nesting hides the
-> presets from DSH discovery.
+> presets from DSH discovery. `install.ps1` auto-detects both `preset/preset/`
+> and the legacy `preset/` layout.
 
 ## Components
 
 | Path | Repo | Version | Role |
 |---|---|---|---|
 | `injector/` | [dsh-super-injector](https://github.com/yjh051108/dsh-super-injector) | [v0.3.3](https://github.com/yjh051108/dsh-super-injector/releases/tag/v0.3.3) | Runtime injector: dev_* tool family (inject / hot-reload / staging-promote / uninject / route self-heal); git installs build automatically (prepare hook) |
-| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [v0.3.0](https://github.com/yjh051108/dsh-router-standard/releases/tag/v0.3.0) | Reasoning-mode routing presets: router-standard (classified persona + full sections) / router-spec (deep-think-first). router-pro is planned but NOT part of v0.3.0 |
+| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [latest main](https://github.com/yjh051108/dsh-router-standard/tree/main) | Routing presets: router-standard (progressive disclosure + task routing) / router-spec (deep-think-first) / router-react (RL-interface restoration) |
 
-> Versions follow each component repo's git tag (links go to the matching Release).
+> The submodule pointer is the current version; component repos may also publish Release tags.
 
 The two components evolve independently (submodules point at each repo's
 `main`); the suite aggregates the install chain and the overview.
+
+> The `preset/` submodule is now synced to the dsh-router-standard `main`
+> research line. The P1–P23 and v0.3.0 sections below remain as the historical
+> routing-line summary.
 
 ## router-standard preset capabilities (P1–P23 measured summary)
 
