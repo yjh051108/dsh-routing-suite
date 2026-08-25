@@ -412,6 +412,11 @@ test('router visibility tools are registered', () => {
   assert.ok(!names.includes('dev_router_mode'), 'v1.20: dev_router_mode retired (no preset-internal routing)')
 })
 
+test('POSIX composition registers the model-facing bash tool', () => {
+  const config = readFileSync(new URL('./router-standard/agent.cordis.yml', import.meta.url), 'utf8')
+  assert.match(config, /^- id: tool-bash\n  name: '@deepseek-ai\/dsh-tool-bash'\n  disabled: !!js process\.platform === 'win32'$/m)
+})
+
 // ── v0.9 self-routed phases ─────────────────────────────────────────────────
 
 function tmpStageFile() {
