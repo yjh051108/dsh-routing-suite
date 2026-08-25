@@ -1,0 +1,19 @@
+NOTICE
+
+This project builds on the DeepSeek Harness ecosystem and on prior open work:
+
+- `preset/agent.cordis.yml` is modified from the DeepSeek Harness **Standard**
+  agent preset (MIT). Original DeepSeek copyright and MIT license terms apply
+  to that file's derived content.
+- The first-turn anchoring mechanism (narrow tool surface, expand after the
+  first durable tool call) is a plugin-level port of the bootstrap filter in
+  **xiaobright/dsh-anchored-standard** (MIT): two-phase preset with minimal
+  persona + shell/read bootstrap, Project2 measured 98/99.
+- The trajectory lexicon classifier follows
+  **xiaobright/modeltest** (evaluator/trigger_probe, MIT): conservative
+  minimal-like / standard-like classification.
+- Project2 evaluation numbers cited in docs/ come from **xiaobright/modeltest**
+  (V4.1b, frozen, personal harness; not a public benchmark).
+
+DeepSeek is a trademark of its respective owner. This project is a community
+artifact and is not endorsed by DeepSeek.

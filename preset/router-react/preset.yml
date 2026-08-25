@@ -1,0 +1,2 @@
+name: Router React (experimental)
+description: Task-aware routing — RL-interface restoration (think-act loops): first request = one RL sentence + shell/editor surface. Full Standard tools after the first tool call.

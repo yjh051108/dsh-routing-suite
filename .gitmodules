@@ -1,6 +1,0 @@
-[submodule "injector"]
-	path = injector
-	url = https://github.com/yjh051108/dsh-super-injector.git
-[submodule "preset"]
-	path = preset
-	url = https://github.com/yjh051108/dsh-router-standard.git

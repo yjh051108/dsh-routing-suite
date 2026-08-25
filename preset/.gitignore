@@ -1,0 +1,48 @@
+# ── preset 探针实验现场（历史归档，不随仓库分发）──────────
+# probe/ 是历史实验快照：脚本依赖已断（见 probe/README.md）。
+# 大件/脚本/中间产物都不入主干——主干只含 preset 核心代码/文档/测试。
+# 保留：probe/README.md（说明历史实验）、probe/cot-lexicon.md 等文档
+# 忽略：probe 脚本（*.mjs/*.py）、大件目录、数据、会话快照
+
+# 大件目录（下载缓存/权重/数据集）
+probe/deepseek-v4-pro-weights/
+probe/dsh-2020-dataset/
+probe/deepseek-tokenizer/
+probe/official-presets/
+probe/sessions/
+
+# 实验脚本（历史断链快照，不入主干）
+probe/*.mjs
+probe/*.py
+
+# 结果数据（实验中间产物）
+probe/results/
+
+# 顶层散落的候选池/参数数据 json、csv
+probe/*-candidates.json
+probe/*-multivocab-candidates.json
+probe/candidates.json
+probe/*.csv
+probe/bruteforce-candidates.json
+probe/full-lexicon-multivocab-candidates.json
+probe/full-lexicon-weend-candidates.json
+probe/multivocab-candidates.json
+probe/over-multivocab-candidates.json
+probe/positive-multivocab-candidates.json
+probe/stable-over-multivocab-candidates.json
+probe/sandwich-samples.json
+probe/user-tasks-100-long.json
+probe/seed-5000.json
+
+# 广义实验数据（jsonl/带时间戳的日志）
+probe/*.jsonl
+probe/*.log
+
+# 模型代理训练产物
+probe/*.pt
+probe/*.bin
+
+# 运行时的临时 jit/v8 缓存
+probe/v8-compile-cache/
+probe/curated-400.json
+probe/curated-400-tokenized.csv

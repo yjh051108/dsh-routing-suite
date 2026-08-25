@@ -8,8 +8,8 @@
 ## 安装链（三步）
 
 ```powershell
-# 1. 拉套装（含两个 submodule）
-git clone --recurse-submodules https://github.com/yjh051108/dsh-routing-suite.git
+# 1. 拉套装（单仓库：injector/preset 内容已直接入库，无需 submodule）
+git clone https://github.com/yjh051108/dsh-routing-suite.git
 cd dsh-routing-suite
 
 # 2. 一键安装（注入器装配 + 预设复制 + 布局自检 + 提示重启）
@@ -40,11 +40,11 @@ Copy-Item -Recurse .\preset\router-spec $target
 | 路径 | 仓库 | 版本 | 作用 |
 |---|---|---|---|
 | `injector/` | [dsh-super-injector](https://github.com/yjh051108/dsh-super-injector) | [v0.3.3](https://github.com/yjh051108/dsh-super-injector/releases/tag/v0.3.3) | 运行时注入器：dev_* 工具全家桶（注入/热重载/侧挂转正/卸载/路由自愈）；`github:` 装配由 prepare 钩子自动构建 |
-| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [v0.3.0](https://github.com/yjh051108/dsh-router-standard/releases/tag/v0.3.0) | 思维模式路由预设：router-standard（分类 persona + 完整 sections）/ router-spec（深度思考优先）。router-pro 为规划中（planned），未随 v0.3.0 发布 |
+| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [v0.3.0 … 主线 v1.19.1/v34](https://github.com/yjh051108/dsh-router-standard/releases/tag/v0.3.0) | 思维模式路由预设：router-standard（分类 persona + 完整 sections）/ router-spec（深度思考优先）。router-pro 为规划中（planned），未随 v0.3.0 发布 |
 
 > 版本号以各组件仓库的 git tag 为准（列内链接直达对应 Release）。
 
-两个组件独立演进（submodule 指向各自 main），套装聚合安装链与总览。
+两个组件随本仓库统一演进（`injector/` 与 `preset/` 已是仓库内普通目录，内容直接入库）；上游独立仓库 `dsh-super-injector` / `dsh-router-standard` 保留用于独立发布，后续可转镜像/归档。预设安装目录为 `preset/router-standard`（已平铺，无额外嵌套）。
 
 ## router-standard 预设能力（P1-P23 实测摘要）
 
@@ -65,6 +65,7 @@ Copy-Item -Recurse .\preset\router-spec $target
 
 - 注入器引导（规范铁律 10 条）：`injector/README.md`
 - 路由预设论文与实验：`preset/docs/paper.md` + `preset/docs/experiments.md`（P1-P23）
+- 仓库结构迁移（submodule → 直接文件）：[docs/FLATTEN-MIGRATION.md](docs/FLATTEN-MIGRATION.md)
 
 ## 许可证
 

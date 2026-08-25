@@ -9,8 +9,8 @@ restart-free plugin management) plus the **reasoning-mode routing presets**
 ## Install chain (three steps)
 
 ```powershell
-# 1. Clone the suite (includes two submodules)
-git clone --recurse-submodules https://github.com/yjh051108/dsh-routing-suite.git
+# 1. Clone the suite (single repo: injector/preset content is stored directly, no submodules)
+git clone https://github.com/yjh051108/dsh-routing-suite.git
 cd dsh-routing-suite
 
 # 2. One-shot install (injector assembly + preset copy + layout self-check + restart prompt)
@@ -43,12 +43,15 @@ Copy-Item -Recurse .\preset\router-spec $target
 | Path | Repo | Version | Role |
 |---|---|---|---|
 | `injector/` | [dsh-super-injector](https://github.com/yjh051108/dsh-super-injector) | [v0.3.3](https://github.com/yjh051108/dsh-super-injector/releases/tag/v0.3.3) | Runtime injector: dev_* tool family (inject / hot-reload / staging-promote / uninject / route self-heal); git installs build automatically (prepare hook) |
-| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [v0.3.0](https://github.com/yjh051108/dsh-router-standard/releases/tag/v0.3.0) | Reasoning-mode routing presets: router-standard (classified persona + full sections) / router-spec (deep-think-first). router-pro is planned but NOT part of v0.3.0 |
+| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [v0.3.0 … mainline v1.19.1/v34](https://github.com/yjh051108/dsh-router-standard/releases/tag/v0.3.0) | Reasoning-mode routing presets: router-standard (classified persona + full sections) / router-spec (deep-think-first). router-pro is planned but NOT part of v0.3.0 |
 
 > Versions follow each component repo's git tag (links go to the matching Release).
 
-The two components evolve independently (submodules point at each repo's
-`main`); the suite aggregates the install chain and the overview.
+The two components now evolve together with this repository (`injector/` and
+`preset/` are ordinary directories whose contents are committed directly); the
+standalone upstream repos `dsh-super-injector` / `dsh-router-standard` stay for
+independent releases and may later become mirrors/archives. The preset install
+directory is `preset/router-standard` (flat, no extra nesting).
 
 ## router-standard preset capabilities (P1–P23 measured summary)
 

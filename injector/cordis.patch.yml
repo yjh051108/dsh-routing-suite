@@ -1,0 +1,6 @@
+# dsh-super-injector bundle 层：插入引导器插件行。
+# 引导器是唯一需要官方装配的入口；它注入的超级模组全部走运行时注入。
+- insert:
+    - id: dsh-super-injector
+      name: '@dsh-external/dsh-super-injector'
+      config: {}

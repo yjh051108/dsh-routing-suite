@@ -1,0 +1,35 @@
+{
+  "name": "dsh-router-standard",
+  "version": "0.3.0",
+  "description": "Progressive tool disclosure router suite for DeepSeek Harness: stage-gated tool unlock + two-level catalog, PTC (run_code) base with staged SDK, memory/knowledge fusion, pressure sensing, built-in page verification (headless screenshot + console + selector + local JS engine).",
+  "private": false,
+  "license": "MIT",
+  "keywords": [
+    "dsh-plugin",
+    "dsh",
+    "deepseek-harness",
+    "progressive-disclosure",
+    "agent-preset"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yjh051108/dsh-router-standard.git"
+  },
+  "homepage": "https://github.com/yjh051108/dsh-router-standard",
+  "type": "module",
+  "files": [
+    "preset/",
+    "docs/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE",
+    "router.test.mjs",
+    "router.integration.test.mjs"
+  ],
+  "scripts": {
+    "test": "node --test router.test.mjs router.integration.test.mjs",
+    "probe": "node probe/matrix.mjs"
+  },
+  "engines": { "node": ">=22" }
+}
