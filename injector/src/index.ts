@@ -2061,10 +2061,14 @@ export function apply(ctx: AppContext, config: Config): void {
     return 'OK: 卸载完成\n- ' + steps.join('\n- ')
   }
 
-  /** junction 健康检查：能读目录 = 目标可达（Windows 断电后悬空 junction 的 lstat 仍是链接但读目录抛错）。 */
+  /** junction 健康检查：能读目录 = 目标可达（Windows 断电后悬空 junction 的 lstat 仍是链接但读目录抛错）。
+   *  ⚠️ 真实（非链接）目录/文件视为健康——它们是 profile 包管理器（pnpm hoisted 布局）管理的
+   *  安装实体，绝不能被当成"不健康链接"删除重建（2026-08 事故：dsh-better-sidebar 经
+   *  pnpm 装进 profile 后 dev_inject_plugin 把整个包目录 rmSync 掉换成了自指 junction）。 */
   function isHealthyLink(p: string): boolean {
     try {
-      if (!lstatSync(p).isSymbolicLink()) return false
+      const st = lstatSync(p)
+      if (!st.isSymbolicLink()) return true
       readdirSync(p)
       return true
     } catch {
