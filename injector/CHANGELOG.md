@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.3.4 — 提示词/上下文通道对齐（context-engineering + system-prompt-engineering）
+
+- **稳定能力声明 context → section**：静态能力说明（dev_* 通道/形态/使命）从每次 assembly 的 runtime-context snapshot
+  迁到 systemPrompt.section（稳定 system 前缀，fiber 生命周期注册）——动态事实才走 context 通道（通道语义修正）。
+- **固定剧本链移除**：能力说明不再灌注 “dev_plugin_status → … → dev_uninject_plugin” 固定序列，改为声明式指引
+  （无固定调用顺序，按需 tools_help 查询）。
+- **dev_* 清理作用域收窄**：purgeStaleTools 只清本插件历史实例登记过的 dev_*（instanceId + globalThis 所有权表），
+  命名前缀不再是所有权证明——其他插件合法注册的 dev_* 不再被误杀；自重载/热更新的僵尸清除能力不变。
+- **工具描述四件套**：dev_release_plugin 补“何时不用 + 外部副作用 + 用户授权前置”；dev_scaffold_plugin 描述精简
+  （四件套结构，实现流程移出 schema）。
+
+验证：typecheck（tsc --noEmit）；行为面由 3081 测试节点装包验证。
+
 本项目版本与仓库提交对应，格式参照 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
 > **版本以 git tag 为准**：已发布 v0.3.1 / v0.3.3（GitHub Releases 资产）；未打 tag 的

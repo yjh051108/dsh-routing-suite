@@ -80,7 +80,7 @@ function baseAssembled() {
   return {
     sections: SECTIONS.map((s) => ({ ...s })),
     tools: TOOLS.map((t) => ({ ...t })),
-    contexts: [],
+    contexts: [{ name: 'harness-foreign', order: 200, text: 'foreign runtime fact (v1.29 preserved)' }],
     variables: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
   }
 }
@@ -119,7 +119,7 @@ test('first request: RL persona + phase_begin as the only first-turn tool (v0.9)
   assert.match(assembled.sections.find((s) => s.name === 'router-persona').text, /^You are a helpful software engineer assistant\./)
   assert.ok(!assembled.sections.some((s) => s.name === 'router-stage'), 'stage section appears only after phase_begin/promotion')
   assert.deepEqual(assembled.tools.map((t) => t.name), ['phase_begin'])
-  assert.deepEqual(assembled.contexts, [])
+  assert.deepEqual(assembled.contexts, baseAssembled().contexts, 'v1.29: router preserves foreign runtime contexts on the first turn')
   // no injection in the harness (no inbox): the decision stays on the real message
   assert.deepEqual(decision.messages.map((m) => m.id), ['m1'])
 })
@@ -191,7 +191,7 @@ test('standard preset: after the first tool/call the router keeps the full surfa
   assert.match(stageTextSec.text, /Task: 从零开发一个马里奥网页游戏/, 'stage text echoes the real user task (guiding, not gating)')
   assert.ok(assembled.sections.some((s) => s.name === 'router-decl'), 'progressive declaration persists after promotion')
   assert.ok(assembled.sections.some((s) => s.name === 'router-proactivity'), 'pressure guide persists after promotion')
-  assert.deepEqual(assembled.contexts, [])
+  assert.deepEqual(assembled.contexts, baseAssembled().contexts, 'v1.29: router preserves foreign runtime contexts after promotion')
   assert.ok(assembled.tools.length === TOOLS.length, 'full tool catalog exposed')
   assert.match(assembled.sections.find((s) => s.name === 'persona').text, /^You are a helpful software engineer assistant\.$/)
 })
@@ -352,7 +352,7 @@ test('spec preset (routerMode: standard): RL first turn, then full assembly retu
   // RL-interface first turn
   assert.deepEqual(assembled.sections.map((s) => s.name), ['plan-mode', 'router-persona'])
   assert.deepEqual(assembled.tools.map((t) => t.name), ['pwsh', 'str_replace_editor'])
-  assert.deepEqual(assembled.contexts, [])
+  assert.deepEqual(assembled.contexts, baseAssembled().contexts, 'v1.29: spec first turn preserves foreign runtime contexts')
 
   // promoted: the router stops touching the assembly (full sections restored)
   session.events.push({ type: 'tool/call', data: {} })
@@ -439,22 +439,22 @@ test('v1.19: completion signals drive the phase ladder; tool names do not', asyn
   const agent = makeStageAgent(session, appends)
   h.agentRef.current = agent
   // todo_write → planning
-  session.events.push({ type: 'tool/call', data: { name: 'todo_write', arguments: '{}' }, time: Date.now() })
+  session.events.push({ type: 'tool/call', data: { name: 'todo_write', arguments: '{}' }, time: 1001 })
   await h.preStep({ agent, messages: [userMessage('v1', '先看计划')], turn: 1, step: 1 })
   let disk = JSON.parse(readFileSync(file, 'utf8'))
   assert.equal(disk.sessions[session.id].stage, 1, 'todo_write completes alignment → planning')
   // 工具名（哪怕下一档开发工具）不再跳级
-  session.events.push({ type: 'tool/call', data: { name: 'str_replace_editor', arguments: JSON.stringify({ command: 'create', path: 'x.txt', file_text: 'x' }) }, time: Date.now() })
+  session.events.push({ type: 'tool/call', data: { name: 'str_replace_editor', arguments: JSON.stringify({ command: 'create', path: 'x.txt', file_text: 'x' }) }, time: 1002 })
   await h.preStep({ agent, messages: [userMessage('v2', '开始写')], turn: 2, step: 1 })
   disk = JSON.parse(readFileSync(file, 'utf8'))
   assert.equal(disk.sessions[session.id].stage, 1, 'using a dev tool does not skip planning')
   // 计划锁定（todo_write again）→ development
-  session.events.push({ type: 'tool/call', data: { name: 'todo_write', arguments: JSON.stringify({ todos: [] }) }, time: Date.now() })
+  session.events.push({ type: 'tool/call', data: { name: 'todo_write', arguments: JSON.stringify({ todos: [] }) }, time: 1003 })
   await h.preStep({ agent, messages: [userMessage('v3', '计划锁定')], turn: 3, step: 1 })
   disk = JSON.parse(readFileSync(file, 'utf8'))
   assert.equal(disk.sessions[session.id].stage, 2, 'locked plan completes planning → development')
   // delivery_check → verification
-  session.events.push({ type: 'tool/call', data: { name: 'delivery_check' }, time: Date.now() })
+  session.events.push({ type: 'tool/call', data: { name: 'delivery_check' }, time: 1004 })
   await h.preStep({ agent, messages: [userMessage('v4', '交付')], turn: 4, step: 1 })
   disk = JSON.parse(readFileSync(file, 'utf8'))
   assert.equal(disk.sessions[session.id].stage, 3, 'delivery intent completes development → verification')

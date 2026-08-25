@@ -1,6 +1,6 @@
 {
   "name": "@dsh-external/dsh-super-injector",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "超级模组注入器：运行时注入任意本地 DSH 插件包（junction 链接 + loader.create，不碰 patch/package.json/不重启），热重载全家桶 + 开发侧挂区一键转正 + 一键卸载 + 路由自愈 + 插件管理 UI（设置页：列表/卸载/拖入内化），清单持久化重启自动恢复——DSH 生态的 BepInEx 式模组注入入口",
   "private": true,
   "type": "module",

@@ -1,7 +1,7 @@
 # dsh-routing-suite — 注入器 × 思维模式路由 套装
 
-一个仓库装齐「运行时手术台 + 思维模式路由预设」：先装注入器（免重启运行时管理层），
-再用它装配 router-standard 预设（任务感知思维模式路由，P1-P23 实测）。
+一个仓库装齐「运行时手术台 + 路由预设」：先装注入器（免重启运行时管理层），
+再用它装配 router-standard 预设（严格 workflow + 阶段化渐进披露 + 交付证据门禁）。persona 路由实验史（P1-P23）见下文。
 
 [中文](README.md) | [English](README.en.md)
 
@@ -39,14 +39,25 @@ Copy-Item -Recurse .\preset\router-spec $target
 
 | 路径 | 仓库 | 版本 | 作用 |
 |---|---|---|---|
-| `injector/` | [dsh-super-injector](https://github.com/yjh051108/dsh-super-injector) | [v0.3.3](https://github.com/yjh051108/dsh-super-injector/releases/tag/v0.3.3) | 运行时注入器：dev_* 工具全家桶（注入/热重载/侧挂转正/卸载/路由自愈）；`github:` 装配由 prepare 钩子自动构建 |
-| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [v0.3.0 … 主线 v1.19.1/v34](https://github.com/yjh051108/dsh-router-standard/releases/tag/v0.3.0) | 思维模式路由预设：router-standard（分类 persona + 完整 sections）/ router-spec（深度思考优先）。router-pro 为规划中（planned），未随 v0.3.0 发布 |
+| `injector/` | [dsh-super-injector](https://github.com/yjh051108/dsh-super-injector) | [v0.3.4](https://github.com/yjh051108/dsh-super-injector/releases/tag/v0.3.4) | 运行时注入器：dev_* 工具全家桶（注入/热重载/侧挂转正/卸载/路由自愈）；v0.3.4 稳定能力声明迁 systemPrompt.section 通道 + dev_* 清理作用域收窄；`github:` 装配由 prepare 钩子自动构建 |
+| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [v0.3.0 … 主线 v1.29.0/v34](https://github.com/yjh051108/dsh-router-standard/releases/tag/v0.3.0) | 路由预设：router-standard（固定 RL persona + 阶段化渐进披露 + delivery_check 证据门禁）/ router-spec（深度思考优先，实验）。v1.29 对齐 schema=执行一致 + 保留他方 runtime contexts |
 
 > 版本号以各组件仓库的 git tag 为准（列内链接直达对应 Release）。
 
-两个组件随本仓库统一演进（`injector/` 与 `preset/` 已是仓库内普通目录，内容直接入库）；上游独立仓库 `dsh-super-injector` / `dsh-router-standard` 保留用于独立发布，后续可转镜像/归档。预设安装目录为 `preset/router-standard`（已平铺，无额外嵌套）。
+`injector/` 与 `preset/` 是随本仓库入库的**安装镜像**；预设安装目录为 `preset/router-standard`（已平铺，无额外嵌套）。
 
-## router-standard 预设能力（P1-P23 实测摘要）
+## 同步策略（source of truth）
+
+- **上游独立仓库是发布源**：代码在 `dsh-super-injector` / `dsh-router-standard` 以 PR 演进；
+  本仓库镜像在发布/对齐时**整体复制**更新——同一文件只在一个仓库手改，禁止双向人工演进。
+- **同步动作**：上游 PR 合并后，从两个独立仓库 main 复制对应文件到 `injector/`、`preset/`，提交注明 `sync: <upstream>@<sha>`。
+- **当前待同步**：router-standard v1.29.0（`fix/ctxprompt-alignment`）、dsh-super-injector v0.3.4（`fix/ctxprompt-alignment`）——上游 PR 合并后执行本步。
+- **版本口径**：以独立仓库 CHANGELOG / git tag 为准；本 README 表格保持与上游对齐。
+
+## router-standard 预设能力（P1-P23 实测摘要 · 历史实验线）
+
+> ⚠️ 本表是 persona 路由实验线（v1.19 之前）的历史记录。**当前主线（v1.20+，见 `preset/CHANGELOG.md`）：固定 RL persona + 阶段化渐进披露（零预解锁）
+> + 完成信号晋级 + delivery_check 交付证据门禁**；按任务分类的 persona 路由已退役，此表保留作实验档案。
 
 - **三行为带 + weak 内路由**：spec（计划-集体）/ react（执行者）/ mixed（陷阱，回避）/ weak（模型自分类）
 - **按模型选 persona**：Pro=spec 句+few-shot（区分度 +5.0）；Flash=neutral+classify（+5.7）

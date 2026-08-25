@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.29.0 — 上下文 / 提示词工程对齐（context-engineering + system-prompt-engineering 双技能吸收）
+
+**schema ↔ 执行一致（system-prompt-engineering）**：delivery_check 删除死参数与矛盾承诺——不再内置
+headless smoke，url 改为页面门禁标记（evidence 须含 ≥1 项 reviewed:true 视觉证据），移除
+requireSmoke / timeoutMs / virtualTimeMs / retry；此前“传 url 无条件 FAIL”陷阱消失（schema=执行，测试固化）。
+
+**上下文通道正确（context-engineering）**：装配不再无差别清空他方 runtime contexts——三处
+contexts: []（首轮 / 晋级 / SDK 分支）全除，只保留本 preset 拥有的 sections；集成测试以
+foreign-context fixture 固化“他方动态事实必须存活”。
+
+**注意力税收敛（反剧本化）**：四阶段指南压缩为声明式 Object / Link / Action；planning 阶段不再指引
+调用验证阶段才解锁的 subagent / workflow（指引与执行可用性一致）。
+
+**阶段边界确定性**：auto-advance 的 stageAtTime 由墙钟 Date.now() 改为“已消费事件最大时间 +1”——事件时间严格递增的宿主语义不变，测试可注入显式时间戳（修复同毫秒墙钟碰撞导致的 flaky 晋级测试）。
+
+**版本线**：v34 与 mjs 镜像同步；ROUTER_VERSION → v1.29.0；spec preset 同步 contexts 保留。
+
+验证：router.test + router.integration.test 全绿；selftest PASS。
+
 ## v1.27.0 — 隔离与并行（注意力工程 · 支柱4）
 
 **支柱4 隔离与并行**：当两个独立关注点污染单线程、或一个子问题吞噬主线预算时，用 subagent/workflow

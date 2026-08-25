@@ -225,31 +225,44 @@ test('paramHint: 参数名+类型速览消灭猜参数摩擦 (v1.4 → v1.5 带�
   assert.match(paramHint(() => ({})), /tools_help/)
   assert.equal(paramHint(undefined), 'no params')
 })
-test('deliveryCheck: 交付 gate 检查清单（v1.11 → v1.14 requireSmoke+evidence）', async () => {
+test('deliveryCheck: 交付 gate 证据门禁（v1.29：schema=执行对齐，无内置 smoke，url=页面门禁标记）', async () => {
   // 缺失路径 → FAIL + 证据
   const nofile = await deliveryCheck({ get: () => undefined }, { file: 'Z:\\\\no-such-file-xyz.html' })
   assert.equal(nofile.ok, false)
   assert.ok(nofile.checks.some((c) => c.name === 'file-exists' && !c.pass))
-  // 临时有效文件：无 url + 无 evidence → smoke/evidence FAIL（v1.14 不再可绕过）
+  // 临时有效文件：无 evidence → 证据 FAIL；且无 page-verify 判定（v1.29 不再内置 smoke）
   const tmp = join(process.cwd(), '.t-delivery-probe.html')
   writeFileSync(tmp, '<!doctype html><html><head><title>OK</title></head><body>x</body></html>', 'utf8')
   try {
-    const noSmoke = await deliveryCheck({ get: () => undefined }, { file: tmp })
-    assert.equal(noSmoke.ok, false)
-    assert.ok(noSmoke.checks.some((c) => c.name === 'page-verify' && !c.pass || (c.name === 'delivery-evidence' && !c.pass)), 'page verify required (v1.23: model self-tests via bash, gate on evidence)')
-    assert.ok(noSmoke.checks.some((c) => c.name === 'delivery-evidence' && !c.pass), 'evidence required')
-    // 非页面产物显式关 smoke + 给 evidence → PASS
+    const noEv = await deliveryCheck({ get: () => undefined }, { file: tmp })
+    assert.equal(noEv.ok, false)
+    assert.ok(noEv.checks.some((c) => c.name === 'delivery-evidence' && !c.pass), 'evidence required')
+    assert.ok(!noEv.checks.some((c) => c.name === 'page-verify'), 'v1.29: delivery_check 不内置 smoke（schema 与执行一致）')
+    // 非页面产物：file evidence → PASS
     const okr = await deliveryCheck({ get: () => undefined }, {
-      file: tmp, requireSmoke: false,
+      file: tmp,
       evidence: { items: [{ label: 'file', kind: 'file', target: tmp }] },
     })
     assert.equal(okr.ok, true)
+    // 页面交付物：url + reviewed 视觉证据 → PASS
+    const pageOk = await deliveryCheck({ get: () => undefined }, {
+      file: tmp, url: 'http://localhost:3000/x.html',
+      evidence: { items: [{ label: 'shot', kind: 'image', target: tmp, reviewed: true }] },
+    })
+    assert.equal(pageOk.ok, true)
+    // 页面交付物：url 但无 reviewed 视觉证据 → FAIL
+    const pageBad = await deliveryCheck({ get: () => undefined }, {
+      file: tmp, url: 'http://localhost:3000/x.html',
+      evidence: { items: [{ label: 'file', kind: 'file', target: tmp }] },
+    })
+    assert.equal(pageBad.ok, false)
+    assert.ok(pageBad.checks.some((c) => c.name === 'delivery-evidence' && !c.pass), 'page deliverable needs reviewed visual evidence')
   } finally { rmSync(tmp, { force: true }) }
   // 非法 UTF-8 → encoding FAIL
   const bad = join(process.cwd(), '.t-bad.html')
   writeFileSync(bad, Buffer.from([0xff, 0xfe, 0x00, 0x41]), 'utf8')
   try {
-    const badr = await deliveryCheck({ get: () => undefined }, { file: bad, requireSmoke: false, evidence: { items: [{ label: 'f', kind: 'file', target: bad }] } })
+    const badr = await deliveryCheck({ get: () => undefined }, { file: bad, evidence: { items: [{ label: 'f', kind: 'file', target: bad }] } })
     assert.equal(badr.ok, false)
     assert.ok(badr.checks.some((c) => c.name === 'encoding-utf8' && !c.pass))
   } finally { rmSync(bad, { force: true }) }
@@ -273,7 +286,7 @@ test('v1.16: muteAwareList/isMemoryTool + external evidence', async () => {
   writeFileSync(tmp, 'x', 'utf8')
   try {
     const okr = await deliveryCheck({ get: () => undefined }, {
-      file: tmp, requireSmoke: false,
+      file: tmp,
       evidence: { items: [{ label: 'pw-screenshot', kind: 'external', target: tmp, reviewed: true }] },
     })
     assert.equal(okr.ok, true)

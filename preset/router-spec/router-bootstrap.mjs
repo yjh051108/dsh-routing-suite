@@ -20,7 +20,7 @@
  *
  * ── v0.3.0: real-assembly-chain fixes ─────────────────────────────────────
  *
- * See the identical notes in `router-standard/router-bootstrap.mjs`:
+ * See the identical notes in `preset/router-standard/router-bootstrap.mjs`:
  * first-turn classification now runs off `agent/inbox/claimed` (#13), and
  * near-field guidance is injected at `agent/pre-step` into the SAME request
  * as the user message (#34/#36/#55). The promoted branch restores the full
@@ -148,7 +148,7 @@ export function apply(ctx, config) {
       // touching anything — standard mode restores the full sections/contexts;
       // spec mode keeps its classified persona over the untrimmed list.
       if (routerMode === 'standard') return assembled
-      return { ...assembled, sections, contexts: [] }
+      return { ...assembled, sections } // v1.29: 保留他方 runtime contexts
     }
 
     const available = new Set(assembled.tools.map((tool) => tool.name))
@@ -161,9 +161,8 @@ export function apply(ctx, config) {
     return {
       ...assembled,
       sections,
-      contexts: [],
       tools: assembled.tools.filter((tool) => core.has(tool.name)),
-    }
+    } // v1.29: 保留他方 runtime contexts
   })
 
   // ── near-field routing guidance for weak mode (P14/P16/P17/P19/P20) ─────

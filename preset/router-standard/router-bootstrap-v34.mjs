@@ -1,5 +1,5 @@
 /**
- * router-bootstrap (standard v1.20.0): progressive disclosure with zero pre-unlock — each stage sees only its own tools (anti-"haste" main line).
+ * router-bootstrap (standard v1.29.0): progressive disclosure with zero pre-unlock — each stage sees only its own tools (anti-"haste" main line).
  *
  * 时序（用户定稿）：
  *   T0 首轮 = 纯 RL 句（46 字符）+ phase_begin（唯一确认工具，native；稳定 we）
@@ -54,14 +54,14 @@ function toJsonSchema(spec) {
 }
 
 const RL_PERSONA = 'You are a helpful software engineer assistant.'
-const ROUTER_VERSION = 'v1.20.0'
+const ROUTER_VERSION = 'v1.29.0'
 /* 描述单源（v1.13 审计修复）：main 注册与 own-layer shim 读同一份，杜绝双份漂移。 */
 const DESC = {
   toolsCatalog: '渐进式披露一级：默认只列当前阶段可调工具（未解锁不点名、不预告后续工具）；query 单点白盒（命中未解锁才给相关行，带解锁阶段/交付期标注）；无全量出口——严格按阶段推进，未解锁工具名称不进入视野。行标注=运行时真绑定。',
   toolsHelp: '渐进式披露二级：单个工具的完整 schema（含解锁阶段提示）。查询本身是主动行为——可查未解锁工具详情，但调用会被拒绝。',
   phaseAdvance: '闯关推进：声明当前阶段已完成，进入下一阶段（解锁新工具 + 阶段提示）。逐级推进（一次一级，不跳级）。仅在明确完成本阶段工作时调用。进入验证/交付阶段后：先 delivery_check(file[, url], evidence)，PASS 才可宣告完成。',
   routerStatus: 'Show the current routing state (phase, band, persona, unlocked tools, override). No arguments — call as tools["dev_router_status"]({}).',
-  deliveryCheck: '交付 gate（阶段出口契约）。检查清单：file-exists / file-nonempty / encoding-utf8（必查）+ headless-smoke（页面类必查：传 url；requireSmoke 默认 true——省略 url 会 FAIL，不再可绕过）+ delivery-evidence。evidence 结构（tools_help 同源）：{ items: [{ label, kind ∈ file|page|image|run|test|text|external|numeric, target?（file/page/image/test 必填路径）, result?（run/text/external 必填文本）, external?（kind=external：target=输出路径或命令、result=结果摘要）, reviewed?: true（page/image 视觉类必须人工复核） }] }。⚠️ 全部 PASS 才允许宣告完成；任一 FAIL 修复后重跑，不允许绕过。',
+  deliveryCheck: '交付 gate（阶段出口契约）。检查清单：file-exists / file-nonempty / encoding-utf8（必查）+ delivery-evidence（证据门禁）。页面交付物：传 url 标记（http(s):// / file:// / 裸路径），gate 要求 evidence 含 ≥1 项 reviewed:true 的视觉证据（kind ∈ page|image|external）——delivery_check 不内置浏览器，页面视觉验证由你自己做（bash 起 headless Chrome/Playwright 截图 + read_image 复核），gate 只校验证据。evidence 结构（tools_help 同源）：{ items: [{ label, kind ∈ file|page|image|run|test|text|external|numeric, target?（file/page/image/test 必填路径）, result?（run/text/external 必填文本）, external?（kind=external：target=输出路径或命令、result=结果摘要）, reviewed?: true（page/image 视觉类必须人工复核） }] }。⚠️ 全部 PASS 才允许宣告完成；任一 FAIL 修复后重跑，不允许绕过。',
 }
 const PROGRESSIVE_DECL =
   'We hold a full tool registry (see tools_catalog for the live count), revealed in phases. tools_catalog lists every tool (name + summary + [phase mark] + param names); tools_help <name> returns any tool\'s complete spec. We query on demand and call precisely. '
@@ -117,10 +117,10 @@ export function windowFor(stage) { return Math.min(stage + 1, STAGES.length) }
  *  v1.5：caps 提示 / write-edit 只用 path / shell 真实语义 / dev_page_check。
  *  v1.6：预放两档 + 直达语义（写 HTML 直给任务零路由成本）；跨语言转义提醒。 */
 const STAGE_GUIDES = [
-  'Phase: understanding. Unlocked: this stage only — read/glob/grep/web_search/ask_user_question + memory recall/verify/respond. Ground first: recall → verify → read/ask. Do this stage properly and think broadly — do not settle on the first obvious reading. Break the request into its dimensions (what the user wants, how features should behave, what "good" looks like) and surface the genuinely ambiguous ones: a word like "拖拽" could mean reorder, drag-to-recategory, or both; "瀑布流" could mean masonry columns or JS-grid; persistence is often unspecified. **Decide each ambiguity by its impact:** if you can infer the common meaning and only one interpretation is reasonable for a deliverable, state that assumption clearly in one sentence (so the user can correct it) and continue — but if two or more interpretations would materially change the result (reorder vs recategory; persist vs not), ask ONE focused ask_user_question per such ambiguity, with concrete options. Do not under-ask (assume everything) nor over-ask (interrogate trivia) — aim for the questions that actually change the artifact. This is a deep-thinking stage: if the task is complex, also record a plan (todo_write). **Complete when: you understand the task (assumptions stated, or key ambiguities answered) — and, if complex, a plan is recorded. No alignment, no advancement.** → Done? Understood (stated assumption / question answered / plan recorded) → next stage.',
-  'Phase: planning. Unlocked: todo_write/exit_plan_mode + memory review (search/open). Do this stage properly: design the approach, cover edge cases, define what "done" means, and decide acceptance criteria — not just list steps. **Attention reclamation (v1.26): assetize your context — keep the task goal + the current decision + the live evidence in the attention window; sink settled exploration/details into memory (engram_store) instead of holding them all; let stale, superseded, or resolved threads truly drop (fresh context recovers attention). Do not hold "everything might be useful" in mind — that is attention leakage, not diligence.** **Isolation & parallel (pillar 4): when two independent concerns are polluting one thread, or a sub-problem is eating the mainline budget, push it into a subagent / workflow (independent context) instead of keeping it in the same stream — a focused subagent holds its own attention so your mainline stays on the critical path.** **Complete when: the plan is thorough enough that the design is decision-complete (what to build, how it fits, what success looks like), recorded via todo_write or presented via exit_plan_mode.** Only this lets you enter development. Note: a completion signal (todo_write / exit_plan_mode) AUTO-advances to the next phase — do NOT call phase_advance after it, or you will skip a phase. → Done? Plan is decision-complete and locked (todo_write / exit_plan_mode) → develop (auto).',
-  'Phase: development. Unlocked: write/edit/str_replace_editor + memory write (store/link). Re-read before re-edit (editor enforces fresh read); write/edit results carry FULL before/after text — take path/operation, inspect with grep/read. Do this stage properly: make the artifact real, self-check it against the plan and the acceptance criteria, and do not declare it done until it actually passes its own check. **Avoid local-optima (v1.22): keep the WHOLE artifact working while you iterate. If you find yourself re-fighting the same detail for several rounds with no convergence (e.g. a finite-difference sign, a conservation drift), step back: (1) is this detail blocking the overall deliverable, or is it polish? (2) preserve a working version; iterate on the detail in parallel, not by stalling the whole. (3) if a detail resists, finish the rest and re-attack it fresh — do not let one stubborn sub-problem stall the deliverable.** **Complete when: the artifact exists and passes its self-check — then enter verification via delivery_check (completion signal) or phase_advance.** → Done? Self-check passes → delivery_check → verification.',
-  'Phase: verification → delivery gate. Unlocked: pwsh/bash/read_image/jobs + delivery_check. Windows: bash = Git Bash (first-class), pwsh for PowerShell; Git Bash may need the one-shot sandbox escalation (approval=never: if denied, report it — never bypass). Page verify with your OWN tools: run a headless browser/playwright via bash (or install one), screenshot + read_image each shot (reviewed:true) to visually confirm. **On verification failure, hold a quick hypothesis-audit (guidance, not a hard block): before touching the implementation, name in one line (a) which assumption you are now re-checking, (b) what NEW evidence you just gained — this turns "doubt the hypothesis" from a prompt into a habit. If the code is actually correct, say so and move on (do not manufacture a bug to justify rework).** Then check gates/evidence. Do this stage properly: verify the real artifact, not a summary of it — check evidence, look for defects, review the visuals honestly. **Gate: delivery_check must PASS — evidence manifest required; missing evidence/unreviewed visuals = FAIL.**',
+  'Phase: understanding. Unlocked: this stage only — read/glob/grep/web_search/ask_user_question + memory recall/verify/respond. Ground first: recall → verify → read/ask. Think broadly — do not settle on the first reading. Break the request into dimensions and decide each ambiguity by impact: one reasonable reading → state the assumption in one sentence and continue; two+ readings that materially change the result → ONE ask_user_question per ambiguity (concrete options). Do not under-ask (assume everything) nor over-ask (interrogate trivia). Complex task → record a plan (todo_write). **Complete when the task is understood (assumptions stated / key ambiguities answered) and, if complex, a plan is recorded. No alignment, no advancement.** → Done? Understood → next stage.',
+  'Phase: planning. Unlocked: todo_write/exit_plan_mode + memory review (search/open). Design the approach: cover edge cases, define "done" and acceptance criteria — not just steps. **Attention (v1.26): hold task goal + current decision + live evidence; sink settled detail into memory (engram_store); let stale/superseded threads drop — attention leakage is not diligence.** **Isolation (v1.27): an independent concern polluting this thread → split it into its own todo now; subagent/workflow 独立上下文在验证阶段才解锁，届时用它隔离，当前阶段先把关注点拆成条目。** **Complete when the plan is decision-complete and locked (todo_write / exit_plan_mode). Only this lets you enter development. Completion signal AUTO-advances — do NOT call phase_advance after it (would skip a phase).** → Done? Plan locked → develop (auto).',
+  'Phase: development. Unlocked: write/edit/str_replace_editor + memory write (store/link). Re-read before re-edit; write/edit results carry FULL before/after text — take only path/operation, inspect with grep/read. Make the artifact real and self-check against the plan + acceptance criteria; do not declare done until it passes its own check. **Avoid local-optima (v1.22): keep the WHOLE artifact working — a stubborn detail is polish unless it blocks the deliverable; finish the rest and re-attack it fresh.** **Complete when the artifact exists and passes its self-check → enter verification via delivery_check (completion signal) or phase_advance.** → Done? Self-check passes → delivery_check → verification.',
+  'Phase: verification → delivery gate. Unlocked: pwsh/bash/read_image/jobs + delivery_check. Windows: bash = Git Bash (first-class), pwsh for PowerShell; one-shot sandbox escalation denied → report, never bypass. Page verify with YOUR OWN tools: bash headless Chrome/playwright screenshot + read_image each shot (reviewed:true). **On failure: one-line hypothesis audit — (a) which assumption are you re-checking, (b) what NEW evidence did you gain; if the code is correct, say so and move on (do not manufacture a bug).** **Gate: delivery_check must PASS — evidence manifest required; missing evidence/unreviewed visuals = FAIL.** → Done? Gate passed → delivered.',
 ]
 
 /** 阶段文本（we-form——you-form 是 let me 吸引子）。
@@ -434,10 +434,7 @@ export async function deliveryCheck(ctx, args) {
   // v1.23（方案A·大道至简）：delivery_check 不再自跑 headless smoke（此前复用 dev_page_check/pageCheckRun，反复出bug）。
   // 页面交付物的视觉验证交给**模型用 bash 自测**（playwright/headless Chrome 截图 + read_image 视觉确认），
   // 并在 evidence 里给 visual proof（kind=image, reviewed:true）。delivery_check 校验 evidence 门禁，而非自已渲染。
-  const requireSmoke = args?.requireSmoke !== false
-  if (args?.url && requireSmoke) {
-    checks.push({ name: 'page-verify', pass: false, detail: 'visual verify the page with bash (headless Chrome/playwright screenshot) + read_image (reviewed:true) into evidence — delivery_check gates the evidence, not a built-in browser' })
-  }
+  /* v1.29：删除旧“url+requireSmoke→无条件 page-verify FAIL”陷阱——视觉证据要求已由下方 delivery-evidence（reviewed:true）覆盖；无内置 smoke 判定。
   /* 证据门禁（正式交付契约——v1.14 规范化：schema 写清进工具描述，不再让模型读源码）：
    * evidence.items[] 每项: { label, kind ∈ file|page|image|run|test|text|external|numeric, target?（file/page/image/test 必填路径）,
    *   result?（run/text 必填文本）, reviewed?: true（page/image 视觉类必须人工复核过）}
@@ -639,7 +636,7 @@ export function apply(ctx, config) {
 
     if (!promoted) {
       // 首轮：无 restrict + 工具面只留 phase_begin（纯 RL 条件 = 稳定 we）
-      return { ...assembled, sections: baseSections, contexts: [], tools: assembled.tools.filter((tool) => tool.name === 'phase_begin') }
+      return { ...assembled, sections: baseSections, tools: assembled.tools.filter((tool) => tool.name === 'phase_begin') } // v1.29: 保留他方 runtime contexts（context-engineering：只清理自己拥有且有害的）
     }
 
     // promoted：官方 sections 回流（persona 保持 RL 句）+ 引导带宽控 + 阶段声明 + 常驻段
@@ -661,10 +658,10 @@ export function apply(ctx, config) {
     if (available.has('run_code')) {
       const staged = buildStagedSdk(sections, stage)
       if (staged) {
-        return { ...assembled, sections: sections.map((s) => (s.name === 'tools:sdk' ? staged : s)), contexts: [] }
+        return { ...assembled, sections: sections.map((s) => (s.name === 'tools:sdk' ? staged : s)) }
       }
     }
-    return { ...assembled, sections, contexts: [] }
+    return { ...assembled, sections }
   })
 
   // ── 自主路由（pre-step）：调用下一档工具 → 自动推进阶段 ──────────────────
@@ -676,7 +673,7 @@ export function apply(ctx, config) {
     const sid = agent.session.id
     const st = (ensureStage()[sid] ??= { stage: 0, guided: false })
     const stageAt = st.stageAtTime ?? 0
-    const toolCalls = (agent.session.events || []).filter((e) => (e.time === undefined || e.time >= stageAt) && (e.type === 'tool/call' || e.type === 'tool/code-dispatch')).map((e) => ({ name: e.data?.name || e.data?.toolName || '', args: toolArgs(e.data) }))
+    const toolCalls = (agent.session.events || []).filter((e) => (e.time === undefined || e.time >= stageAt) && (e.type === 'tool/call' || e.type === 'tool/code-dispatch')).map((e) => ({ name: e.data?.name || e.data?.toolName || '', args: toolArgs(e.data), time: e.time }))
     // v1.17.2：被拒的锁定工具调用（如阶段 0 调 bash → unknown tool）不算行为信号——
     // 只有当前阶段真实可调（view.visible）的工具调用才触发直达推进。
     let advanceCalls = toolCalls
@@ -688,7 +685,10 @@ export function apply(ctx, config) {
     const nextStage = autoAdvance(st.stage, advanceCalls, text)
     if (nextStage > st.stage) {
       st.stage = nextStage
-      st.stageAtTime = Date.now()
+      // v1.29：阶段边界 = 已消费事件最大时间 +1（确定性）——事件时间严格递增的宿主语义不变；
+      // 测试可注入显式递增时间戳，不再受同毫秒墙钟碰撞影响（此前 Date.now() 与事件同 ms 时会重算已消费信号）。
+      const consumedMax = Math.max(0, ...toolCalls.map((c) => (Number.isFinite(c.time) ? Number(c.time) : 0)))
+      st.stageAtTime = consumedMax > 0 ? consumedMax + 1 : Date.now()
       st.lastAdvance = { at: Date.now(), reason: 'auto:' + advanceCalls.map((c) => c.name).filter(Boolean).join(',') }
       saveStageState()
       applyStageRestrict(agent, nextStage)
@@ -902,11 +902,7 @@ export function apply(ctx, config) {
     description: DESC.deliveryCheck,
     parameters: {
       file: { type: 'string', required: true, description: '交付物文件路径（绝对路径或工作区相对路径）' },
-      url: { type: 'string', description: '页面交付物必传：http(s):// / file:// / 裸路径（自动编码）——省略时 headless-smoke 判 FAIL（requireSmoke: false 才可跳过，仅限脚本/文档类非页面产物）' },
-      requireSmoke: { type: 'boolean', description: '默认 true：页面产物必须跑 headless smoke（避免"省略 url 即绕过"）。非页面产物传 false' },
-      timeoutMs: { type: 'number', description: 'smoke 硬超时毫秒（默认 20000）' },
-      virtualTimeMs: { type: 'number', description: 'smoke 虚拟时间预算（默认 8000）' },
-      retry: { type: 'boolean', description: 'smoke 失败时自动重试一次（默认 true，降分辨率+双倍虚拟时间）' },
+      url: { type: 'string', description: '页面交付物标记：http(s):// / file:// / 裸路径。传了即按页面门禁——delivery-evidence 须含 ≥1 项 reviewed:true 视觉证据（kind ∈ page|image|external，见 evidence）；省略 = 非页面门禁（文件/证据门禁仍生效）。' },
       evidence: { type: 'object', description: '通用证据清单。结构（唯一权威）：{ items: [{ label, kind ∈ file|page|image|run|test|text|external|numeric, target?（file/page/image/test 必填路径）, result?（run/text/external 必填文本）, reviewed?: true（page/image 视觉类必须人工复核过） }] }。页面交付物要求至少一项 reviewed:true 的视觉证据；为空则 delivery-evidence 判 FAIL。', properties: {
         items: { type: 'array', items: { type: 'object', additionalProperties: false, properties: {
           kind: { type: 'string', enum: ['file','page','image','run','test','text','external','numeric'] },
@@ -1043,9 +1039,7 @@ export function apply(ctx, config) {
       description: DESC.deliveryCheck,
       parameters: {
         file: { type: 'string', required: true, description: '交付物文件路径' },
-        url: { type: 'string', description: '可选页面地址（自动编码）' },
-        timeoutMs: { type: 'number' }, virtualTimeMs: { type: 'number' }, retry: { type: 'boolean' },
-        requireSmoke: { type: 'boolean', description: '默认 true：页面产物必须 smoke（省略 url 即 FAIL，不再可绕过）' },
+        url: { type: 'string', description: '页面交付物标记：http(s):// / file:// / 裸路径——传了即要求 evidence 含 ≥1 项 reviewed:true 视觉证据（页面门禁）' },
         evidence: { type: 'object', description: '证据清单（结构见 tools_help）：{ items: [{ label, kind ∈ file|page|image|run|test|text|external|numeric, target?, result?, reviewed? }] }——页面类要求至少一项 reviewed:true 视觉证据', properties: {
           items: { type: 'array', items: { type: 'object', additionalProperties: false, properties: {
             kind: { type: 'string', enum: ['file','page','image','run','test','text','external','numeric'] },

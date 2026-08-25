@@ -2356,13 +2356,22 @@ export function apply(ctx: AppContext, config: Config): void {
   // 工具的僵尸闭包」（实测：锁永久卡死、新代码永不生效的根因）。
   function safeRegister(tool: any): void {
     try {
-      ctx.effect(() => ctx.tools.register(tool), `dsh-super-injector: ${tool.name ?? 'tool'}`)
+      ctx.effect(() => {
+        ctx.tools.register(tool)
+        const nm = typeof tool?.name === 'string' ? tool.name : ''
+        if (nm.startsWith('dev_')) devOwners.set(nm, instanceId)
+      }, `dsh-super-injector: ${tool?.name ?? 'tool'}`)
     } catch (e) {
       logger.warn('[super-injector] 跳过冲突工具注册: %s', e instanceof Error ? e.message : String(e))
     }
   }
 
-  /** 启动自净：清除历史版本裸注册残留的同名工具（僵尸闭包），再注册新工具。 */
+  /** 实例身份与 dev_* 所有权登记（globalThis 跨实例共享）。作用域边界：命名前缀不是所有权证明——
+   *  只清本插件历史实例登记过的 dev_*，其他插件合法注册的一律保留（v0.3.4）。 */
+  const instanceId = Math.random().toString(36).slice(2, 10)
+  const devOwners: Map<string, string> = (globalThis as any)[Symbol.for('dsh-super-injector.devOwners')] ?? ((globalThis as any)[Symbol.for('dsh-super-injector.devOwners')] = new Map<string, string>())
+
+  /** 启动自净：清除历史实例裸注册残留的本插件 dev_*（僵尸闭包），再注册新工具。 */
   function purgeStaleTools(): void {
     try {
       const toolsSvc = ctx.get('tools') as {
@@ -2374,7 +2383,7 @@ export function apply(ctx: AppContext, config: Config): void {
       const table = toolsSvc.layers?.global?.tools
       if (table && typeof table.keys === 'function') {
         for (const name of table.keys()) {
-          if (typeof name === 'string' && name.startsWith('dev_')) names.push(name)
+          if (typeof name === 'string' && name.startsWith('dev_') && devOwners.get(name) && devOwners.get(name) !== instanceId) names.push(name)
         }
       }
       for (const name of names) {
@@ -2384,7 +2393,7 @@ export function apply(ctx: AppContext, config: Config): void {
         } catch { /* 单项清理失败继续 */ }
       }
       if (names.length > 0) {
-        logger.warn('[super-injector] 已清理 %d 个僵尸工具残留: %s', names.length, names.join(','))
+        logger.warn('[super-injector] 已清理 %d 个历史实例 dev_* 僵尸残留（作用域内，不动他人 dev_*）: %s', names.length, names.join(','))
         auditLog('purge-stale-tools', names.join(','))
       }
     } catch { /* 自净失败不阻塞 */ }
@@ -2822,7 +2831,7 @@ export function apply(ctx: AppContext, config: Config): void {
 
   safeRegister(defineTool({
     name: 'dev_scaffold_plugin',
-    description: '插件生产线：生成四种形态的插件骨架（toolkit 工具包 / daemon-loop 守护循环(timer+LLM 自主 agent loop) / ui-panel UI 面板 / hybrid 混合）——package.json（peerDeps 范围声明不硬编码版本）+ tsconfig + build.sh（DSH_CHECKOUT 自动探测）+ 形态源码（资源挂 ctx.effect 规范）+ 可选 client 骨架。生成后：dev_build_plugin 构建 → dev_inject_plugin 注入。',
+    description: '插件生产线脚手架：生成四种形态插件骨架（toolkit 工具包 / daemon-loop 守护循环 / ui-panel UI 面板 / hybrid 混合，form 参数选择）——package.json + tsconfig + build.sh + 形态源码 + 可选 client 骨架。前置：目标目录不存在或为空。副作用：在 dir 下写入文件。生成后下一步：dev_build_plugin → dev_inject_plugin（流程细节随工具输出给出）。何时不用：已有插件包（含 package.json + lib/）直接 dev_inject_plugin，勿重新脚手架。',
     parameters: {
       dir: { type: 'string', required: true, description: '目标目录（绝对路径，不存在则创建）' },
       name: { type: 'string', required: true, description: '插件名（如 my-tool；或完整包名 @scope/my-tool）' },
@@ -2968,7 +2977,7 @@ export function apply(ctx: AppContext, config: Config): void {
 
   safeRegister(defineTool({
     name: 'dev_release_plugin',
-    description: '插件生产线：发布 GitHub Release——gh release create v<version> <tgz>（tag + 附件 + notes 模板）。依赖：gh CLI 已认证 + git remote 指向目标仓库。返回 release URL。',
+    description: '插件生产线：发布 GitHub Release——gh release create v<version> <tgz>（tag + 附件 + notes 模板）。前置：gh CLI 已认证 + git remote 指向目标仓库。副作用：向外部 GitHub 仓库真实发布（不可逆、公开可见）——仅在用户明确要求发布时调用；只需 tgz 产物则用 dev_build_plugin，不要发布。已存在同 tag 时 gh 会失败，先核对 tag。返回 release URL。',
     parameters: {
       dir: { type: 'string', required: true, description: '插件目录（含 package.json 与 tgz 产物）' },
       version: { type: 'string', description: '版本号（缺省读 package.json version，如 0.0.1）' },
@@ -3188,11 +3197,13 @@ export function apply(ctx: AppContext, config: Config): void {
   // - 动态内容（记忆检索/实时状态）→ 严禁进 system 头部：走消息尾追加
   //   （尾部注入插件即此模式）或 system 最尾，变化只伤自身之后；
   // - 本段 text 必须保持编译期常量——任何每轮变化的动态拼接都会全灭前缀缓存。
-  // ⚠️ 容忍重复注册（实测：自重载 rebuild 时旧 entry 的 context 可能残留，
+  // ⚠️ 通道选择（context-engineering）：稳定能力声明 = systemPrompt.section（稳定 system 前缀，随 fiber 生命周期注册）；
+  //    每次 assembly 变化的当前事实才走 systemPrompt.context（runtime-context snapshot）。v0.3.4 迁移。
+  // ⚠️ 容忍重复注册（实测：自重载 rebuild 时旧 entry 的 section 可能残留，
   // duplicate 会让 apply 整体 failed → 注入器死亡 + 自愈 3 连败）。duplicate
   // 时跳过注册（新实例可运行），比 failed 强。
   try {
-    ctx.systemPrompt.context({
+    ctx.systemPrompt.section({
       name: 'dsh-super-injector',
       order: -90,
       // 引导（首次接触的 agent 从这段获得完整认知）：
@@ -3205,10 +3216,10 @@ export function apply(ctx: AppContext, config: Config): void {
     //    仓库、已注入插件、官方 packages 的服务面与构建模式），不重复造轮子；
     // 5) 使命：若注入器无法支撑此闭环，优先修复注入器。
     // ⚠️ 静态常量文本（缓存原则：静态到头）——严禁动态拼接。
-    text: '本环境装有 dsh-super-injector（dev_* 工具）：任意本地插件包可运行时注入——工具包/守护循环（timer+LLM 自主 agent loop）/UI 面板/混合形态，同一通道；注入即完整生效（host+UI）、可热重载与自重载、卸载即净。插件自身的提示词/工具/循环皆可自我优化；建新插件优先克隆/借鉴/重构生态已有资源（dsh-external 仓库、已注入插件、官方 packages 模式），不重复造轮子。若注入器无法支撑此闭环，优先修复注入器。从零体验路径：dev_plugin_status → dev_self_test → dev_scaffold_plugin → dev_build_plugin → dev_inject_plugin → dev_uninject_plugin。',
+    text: '本环境装有 dsh-super-injector（dev_* 工具）：任意本地插件包可运行时注入——工具包/守护循环（timer+LLM 自主 agent loop）/UI 面板/混合形态，同一通道；注入即完整生效（host+UI）、可热重载与自重载、卸载即净。插件自身的提示词/工具/循环皆可自我优化；建新插件优先克隆/借鉴/重构生态已有资源（dsh-external 仓库、已注入插件、官方 packages 模式），不重复造轮子。若注入器无法支撑此闭环，优先修复注入器。dev_* 工具说明按需查询（tools_help / dev_plugin_status），无固定调用顺序：先 dev_plugin_status 看当前装配、dev_self_test 自检，再按需脚手架/构建/注入。',
     })
   } catch (e) {
-    logger.warn('[super-injector] systemPrompt.context 重复注册容忍（跳过，新实例继续运行）: %s', e instanceof Error ? e.message : String(e))
+    logger.warn('[super-injector] systemPrompt.section 重复注册容忍（跳过，新实例继续运行）: %s', e instanceof Error ? e.message : String(e))
   }
 
   logger.info('[super-injector] 就绪：watch %d 目录（%dms），autoRestore=%s', watches.length, intervalMs, String(config.autoRestore))

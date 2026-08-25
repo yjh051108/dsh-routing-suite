@@ -9,19 +9,17 @@
 
 ---
 
-## 当前状态（v1.19.1，2026-08-24 · 研发线，尚未发布）
+## 当前状态（v1.29.0，2026-08-25 · 研发线，尚未发布）
 
-**Router Standard 处于「严格 workflow」研发线**（以 CHANGELOG 为准，版本线文件 `router-bootstrap-v34.mjs`）：
+**Router Standard 处于「严格 workflow + 渐进披露」研发线**（以 CHANGELOG 为准，版本线文件 router-bootstrap-v34.mjs）：
 
 - **严格阶段 workflow**：完成信号驱动晋级（0→1 需澄清/计划、1→2 需计划锁定、2→3 需交付自检），
-  阶段 0 强制对齐（歧义先 `ask_user_question`、复杂任务先 `todo_write`）；"工具名/文本即跳级"已删除。
-- **任务回显**：`stageText` 新增 `Task: <首条真实用户消息>`——模型每轮都看得清在为什么事工作，不跑题。
-- **渐进披露**：阶段化解锁 + 两档预放 + 直达语义 + 交付全量开放；`tools_catalog` 全量索引 / `tools_help` 完整 schema；
-  已删除 `all:true`（无全量出口，未解锁工具不进入视野）。
-- **标准模式基底**：native 直调（无 PTC/run_code 包装，SDK 全量段不存在，工具面注意力税大幅下降）。
-- **页面验证内置**：`dev_page_check` = 截图 + DOM smoke + **console/pageerror/title/selector/scale**；
-  `{js:…}` 模式 = 本地 JS 引擎（零外部 node 依赖）；external 证据一等公民。
-- **描述 ⇄ 行为对齐**：`presentation=native` 自检、阶段文案只说真话、平台事实（win32 以 Git Bash 私有 shell seam 为准）。
+  阶段 0 强制对齐（歧义先 ask_user_question、复杂任务先 todo_write）。
+- **渐进披露（零预解锁 v1.20）**：每阶段只见当前档工具，未解锁不点名；tools_catalog 轻索引 + tools_help 按需完整 schema。
+- **native 直调基底**：无 PTC/run_code 包装，工具面注意力税从 39K 落到当前档。
+- **交付 gate（v1.29 对齐）**：delivery_check 校验文件/编码/证据门禁，不内置浏览器——页面视觉验证由模型用 bash 自测（headless 截图 + read_image）并以 reviewed:true 视觉证据入 evidence；对模型暴露的 schema 与执行完全一致。
+- **上下文通道（v1.29）**：装配保留他方 runtime contexts，只管理本 preset 拥有的 sections；阶段事实经 router-stage section 呈现。
+- **描述 ⇄ 行为对齐**：presentation=native 自检、阶段文案只说真话、平台事实（win32 以 Git Bash 私有 shell seam 为准）。
 - **主动性引导**：Proactivity 常驻段（自检信号，不是停手命令）；压力感应器已退役。
 
 配套预设：**router-react（v17）/ router-spec（v10）**（基于标准模式的两大执行预设，均支持首轮读图）；
