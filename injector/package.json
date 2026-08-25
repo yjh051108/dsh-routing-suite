@@ -43,6 +43,7 @@
     "schemastery": "^3.18.0"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis-plugin-loader": "^1.0.2",
     "@types/node": "^24.13.3",
     "tsdown": "^0.22.14",
     "typescript": "^5.9.3"
