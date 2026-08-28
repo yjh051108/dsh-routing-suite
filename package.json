@@ -1,0 +1,66 @@
+{
+  "name": "@dsh-external/dsh-super-injector",
+  "version": "0.3.3",
+  "description": "dsh-routing-suite 分发入口：DSH 超级模组注入器（BepInEx 式运行时注入，免重启）+ router-standard 预设仓库。插件入口为 injector/，预设位于 preset/。",
+  "private": true,
+  "type": "module",
+  "main": "./injector/lib/index.js",
+  "types": "./injector/lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./injector/lib/types/index.d.ts",
+      "default": "./injector/lib/index.js"
+    },
+    "./client": {
+      "types": "./injector/lib/types/client/index.d.ts",
+      "default": "./injector/lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "injector/lib",
+    "injector/scripts",
+    "cordis.patch.yml",
+    "LICENSE",
+    "README.md",
+    "README.en.md"
+  ],
+  "license": "BSD-3-Clause",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "injector",
+    "super-injector",
+    "preset",
+    "router-standard",
+    "cordis",
+    "progressive-disclosure"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yjh051108/dsh-routing-suite.git"
+  },
+  "homepage": "https://github.com/yjh051108/dsh-routing-suite",
+  "bugs": {
+    "url": "https://github.com/yjh051108/dsh-routing-suite/issues"
+  },
+  "engines": { "node": ">=22" },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-tools": ">=0.0.1-rc <2",
+    "cordis": ">=4.0.0-rc <5",
+    "schemastery": "^3.18.0"
+  }
+}
