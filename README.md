@@ -5,6 +5,17 @@
 
 [中文](README.md) | [English](README.en.md)
 
+## 一键安装
+
+```powershell
+dsh plugin --profile web add github:yjh051108/dsh-routing-suite
+```
+
+**DSH Target**：`>=0.1.0-rc.6 <0.2.0`（已跟进 rc.8 / 0.1.1-rc.2 / 0.1.2-alpha.1）
+
+> DSH 目前处于 developer preview，官方明示会有破坏性变更（breaking changes）。
+> 本仓库的版本跟进记录见 `preset/CHANGELOG.md`。
+
 ## 安装链（三步）
 
 ```powershell
