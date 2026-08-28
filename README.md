@@ -33,6 +33,8 @@ Copy-Item -Recurse .\preset\router-spec $target
 # 步骤 3：重启 DSH → 新会话选择 Router Standard / Router Spec (experimental)
 ```
 
+> 仓库另附 `preset/router-react`（v17），`install.ps1` 不安装；需要时按同样方式单独复制。
+
 > 注意：不要复制 `preset` 整目录（会多套一层，DSH 发现不了预设）。
 
 ## 组件

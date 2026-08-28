@@ -35,6 +35,9 @@ Copy-Item -Recurse .\preset\router-spec $target
 # Step 3: restart DSH → pick Router Standard / Router Spec in a new session
 ```
 
+> `preset/router-react` (v17) also ships in this repo but is NOT installed by `install.ps1`.
+> Copy it the same way as the other two if you want it.
+
 > Do NOT copy the `preset` directory as a whole — the extra nesting hides the
 > presets from DSH discovery.
 

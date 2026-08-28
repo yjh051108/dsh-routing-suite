@@ -248,6 +248,9 @@ minimal 99/96 vs standard 91 vs 两阶段 98/99、触发机制微探针、轨迹
 
 ## 踩坑记录
 
+- **本仓库源码开发：`npm i` 必须带 `--legacy-peer-deps`**：peerDependencies（`@deepseek-ai/dsh-tools` 等）由
+  DSH 宿主在 `dsh plugin add` 时提供，npm 却会自动安装 peer 并撞上未发布的 `@deepseek-ai/dsh-type-meta`（404）——
+  用 `npm i --legacy-peer-deps` 跳过；`prepare` 钩子照常构建 `lib/`。`tsc --noEmit` 在无 peer 时报缺模块属正常；
 - **插件包必须自带依赖链接**：`lib/` 里 `import '@deepseek-ai/dsh-tools'` 等从包自身 `node_modules` 解析——照 build.sh 建 junction 到 checkout 包（如 `node_modules/@deepseek-ai/dsh-tools → <checkout>/packages/core/tools`）；
 - **client bundle 需单独构建**：host 侧 `bash scripts/build.sh`（tsc），client 侧 `npm run build:client`（tsdown，产物 `lib/client.js`）——注入插件要出 UI 必须两步都构建；
 - **失败 import 会毒化重试**：loadCache 残留残缺 job 导致同名重载复用失败态——注入前 `purgeCache` 清理；

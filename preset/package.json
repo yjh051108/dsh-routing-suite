@@ -28,8 +28,7 @@
     "router.integration.test.mjs"
   ],
   "scripts": {
-    "test": "node --test router.test.mjs router.integration.test.mjs",
-    "probe": "node probe/matrix.mjs"
+    "test": "node --test router.test.mjs router.integration.test.mjs"
   },
   "engines": { "node": ">=22" }
 }
