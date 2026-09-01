@@ -38,7 +38,6 @@
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-tools": ">=0.0.1-rc <2",
     "cordis": ">=4.0.0-rc <5",
     "schemastery": "^3.18.0"
   },

@@ -45,7 +45,9 @@
   "bugs": {
     "url": "https://github.com/yjh051108/dsh-routing-suite/issues"
   },
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -59,7 +61,6 @@
     }
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-tools": ">=0.0.1-rc <2",
     "cordis": ">=4.0.0-rc <5",
     "schemastery": "^3.18.0"
   }
