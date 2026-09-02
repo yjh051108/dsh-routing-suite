@@ -1,12 +1,40 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { auditBody } from '../src/index.js'
 import {
   initMode, trigger, deactivate, onEditL1, onEditL2, onLockL1, onLockL2,
   onReviewApproved, onReviewRejected, onMark, onCommitStar, onRedteamVerdict, normalizeStar, normalizeItem,
   assertL1Items, assertL2Groups,
   currentFocus, groupDone, allDone, treeText, serializeState, deserializeState,
+  loadConceptLimit, loadVerifyMode,
 } from '../src/mode-state.js'
+
+test('loadConceptLimit：无覆盖文件读全局/有覆盖覆盖优先/缺失回退3', () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'cl-'))
+  const old = process.env.DSH_HOME
+  process.env.DSH_HOME = tmp
+  try {
+    writeFileSync(join(tmp, 'graded-settings.json'), JSON.stringify({ conceptLimit: 8, verifyMode: 'auto' }), 'utf8')
+    // 无会话覆盖文件（常见路径）→ 读全局 8（此前 bug：readFileSync 抛→3）
+    assert.equal(loadConceptLimit('sid-x'), 8)
+    // 会话覆盖存在 → 覆盖优先
+    mkdirSync(join(tmp, 'graded-state'), { recursive: true })
+    writeFileSync(join(tmp, 'graded-state', 'sid-x.settings.json'), JSON.stringify({ conceptLimit: 5 }), 'utf8')
+    assert.equal(loadConceptLimit('sid-x'), 5)
+    // 全局缺失 → 3
+    rmSync(join(tmp, 'graded-settings.json'))
+    assert.equal(loadConceptLimit('sid-x'), 5) // 覆盖仍在
+    assert.equal(loadConceptLimit('sid-y'), 3)
+    // verifyMode 同路径
+    assert.equal(loadVerifyMode('sid-x'), 'auto')
+  } finally {
+    rmSync(tmp, { recursive: true, force: true })
+    if (old === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = old
+  }
+})
 
 const L1 = [
   { title: '分析', spec: '分析链路（组任务描述）', accept: ['链路证据单注', '结论可复核'], verify: 'redteam' },

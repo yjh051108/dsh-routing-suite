@@ -229,8 +229,12 @@ export function onReviewApproved(prev) {
 export function loadConceptLimit(sid) {
   try {
     const root = process.env.DSH_HOME || join(homedir(), '.dsh')
-    const g = JSON.parse(readFileSync(join(root, 'graded-settings.json'), 'utf8'))
-    const s = sid ? JSON.parse(readFileSync(join(root, 'graded-state', String(sid).replace(/[^a-zA-Z0-9-]/g, '_') + '.settings.json'), 'utf8')) : {}
+    let g = {}
+    try { g = JSON.parse(readFileSync(join(root, 'graded-settings.json'), 'utf8')) || {} } catch { g = {} }
+    let s = {}
+    if (sid) {
+      try { s = JSON.parse(readFileSync(join(root, 'graded-state', String(sid).replace(/[^a-zA-Z0-9-]/g, '_') + '.settings.json'), 'utf8')) || {} } catch { s = {} }
+    }
     const n = Number(s.conceptLimit ?? g.conceptLimit ?? 3)
     return Number.isInteger(n) && n >= 3 && n <= 8 ? n : 3
   } catch { return 3 }
@@ -239,8 +243,12 @@ export function loadConceptLimit(sid) {
 export function loadVerifyMode(sid) {
   try {
     const root = process.env.DSH_HOME || join(homedir(), '.dsh')
-    const g = JSON.parse(readFileSync(join(root, 'graded-settings.json'), 'utf8'))
-    const s = sid ? JSON.parse(readFileSync(join(root, 'graded-state', String(sid).replace(/[^a-zA-Z0-9-]/g, '_') + '.settings.json'), 'utf8')) : {}
+    let g = {}
+    try { g = JSON.parse(readFileSync(join(root, 'graded-settings.json'), 'utf8')) || {} } catch { g = {} }
+    let s = {}
+    if (sid) {
+      try { s = JSON.parse(readFileSync(join(root, 'graded-state', String(sid).replace(/[^a-zA-Z0-9-]/g, '_') + '.settings.json'), 'utf8')) || {} } catch { s = {} }
+    }
     const m = s.verifyMode ?? g.verifyMode ?? 'auto'
     return ['auto', 'self-redteam', 'subagent'].includes(m) ? m : 'auto'
   } catch { return 'auto' }

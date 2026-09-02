@@ -238,7 +238,7 @@ export function apply(ctx, config) {
       const sid = q.searchParams.get('sid')
       const json = (o, code = 200) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(o)) }
       const scope = q.searchParams.get('scope')
-      if (req.method === 'GET') return json(settingsFor(sid))
+      if (req.method === 'GET') return json({ ...settingsFor(sid), probe: { loadConceptLimit: (() => { try { return loadConceptLimit(sid) } catch (e) { return String(e) } })() } })
       if (req.method === 'PUT') {
         let raw = ''
         try { for await (const c of req) raw += c } catch { /* */ }
