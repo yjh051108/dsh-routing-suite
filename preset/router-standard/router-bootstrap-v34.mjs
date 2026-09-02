@@ -542,7 +542,7 @@ function loadStageState() {
       const out = {}
       for (const [sid, st] of Object.entries(parsed.sessions)) {
         const stage = Number(st?.stage)
-        if (Number.isInteger(stage) && stage >= 0 && stage <= 3) out[sid] = { stage, guided: st?.guided === true, ...(Number.isFinite(st?.stageAtTime) ? { stageAtTime: st.stageAtTime } : {}), ...(st?.lastAdvance && typeof st.lastAdvance === 'object' ? { lastAdvance: { at: Number.isFinite(st.lastAdvance.at) ? st.lastAdvance.at : 0, reason: st.lastAdvance.reason ?? null } } : {}) }
+        if (Number.isInteger(stage) && stage >= 0 && stage <= 3) out[sid] = { stage, guided: st?.guided === true, ...(Number.isFinite(st?.stageAtTime) ? { stageAtTime: st.stageAtTime } : {}), ...(Number.isInteger(st?.consumed) && st.consumed >= 0 ? { consumed: st.consumed } : {}), ...(st?.lastAdvance && typeof st.lastAdvance === 'object' ? { lastAdvance: { at: Number.isFinite(st.lastAdvance.at) ? st.lastAdvance.at : 0, reason: st.lastAdvance.reason ?? null } } : {}) }
       }
       return out
     }
@@ -554,6 +554,14 @@ function saveStageState() {
     mkdirSync(join(stageFile(), '..'), { recursive: true })
     writeFileSync(stageFile(), JSON.stringify({ version: 2, savedAt: new Date().toISOString(), sessions: ensureStage() }, null, 2), 'utf8')
   } catch (e) { console.error('[router-bootstrap] saveStageState failed:', e) }
+}
+
+/** 阶段推进后标记「已消费」的事件下标：毫秒时间戳分辨率不足，同一毫秒内的调用会被
+ *  下一步重复计入并再次跳级（v0.3.0 缺陷）。事件下标是身份，不是时钟。 */
+function markStageConsumed(st, session) {
+  st.stageAtTime = Date.now()
+  const events = session?.events
+  if (Array.isArray(events)) st.consumed = events.length
 }
 
 /** restrict 交集修复：per-session disposer（释放旧再设新）。 */
@@ -675,8 +683,13 @@ export function apply(ctx, config) {
     const text = userMsg ? extractText(userMsg) : ''
     const sid = agent.session.id
     const st = (ensureStage()[sid] ??= { stage: 0, guided: false })
+    const events = sessionEvents(agent.session)
     const stageAt = st.stageAtTime ?? 0
-    const toolCalls = sessionEvents(agent.session).filter((e) => (e.time === undefined || e.time >= stageAt) && (e.type === 'tool/call' || e.type === 'tool/code-dispatch')).map((e) => ({ name: e.data?.name || e.data?.toolName || '', args: toolArgs(e.data) }))
+    // consumed = 已推进过的事件下标（身份水位）；旧状态无此字段时回退到时间过滤。
+    const fresh = Number.isInteger(st.consumed)
+      ? events.slice(st.consumed)
+      : events.filter((e) => e.time === undefined || e.time >= stageAt)
+    const toolCalls = fresh.filter((e) => e.type === 'tool/call' || e.type === 'tool/code-dispatch').map((e) => ({ name: e.data?.name || e.data?.toolName || '', args: toolArgs(e.data) }))
     // v1.17.2：被拒的锁定工具调用（如阶段 0 调 bash → unknown tool）不算行为信号——
     // 只有当前阶段真实可调（view.visible）的工具调用才触发直达推进。
     let advanceCalls = toolCalls
@@ -688,7 +701,7 @@ export function apply(ctx, config) {
     const nextStage = autoAdvance(st.stage, advanceCalls, text)
     if (nextStage > st.stage) {
       st.stage = nextStage
-      st.stageAtTime = Date.now()
+      markStageConsumed(st, agent.session)
       st.lastAdvance = { at: Date.now(), reason: 'auto:' + advanceCalls.map((c) => c.name).filter(Boolean).join(',') }
       saveStageState()
       applyStageRestrict(agent, nextStage)
@@ -800,7 +813,7 @@ export function apply(ctx, config) {
       const state = ensureStage()
       state[sid] = state[sid] ?? { stage: 0, guided: false }
       state[sid].stage = next
-      state[sid].stageAtTime = Date.now()
+      markStageConsumed(state[sid], session)
       state[sid].lastAdvance = { at: Date.now(), reason: args?.reason ? String(args.reason) : null }
       saveStageState()
       applyStageRestrict(currentAgent(), next)
@@ -1019,7 +1032,7 @@ export function apply(ctx, config) {
         const st = (ensureStage()[sid] ??= { stage: 0, guided: false })
         if (st.stage >= STAGES.length - 1) return 'already at the last stage (' + STAGES[st.stage].name + '); full catalog is open'
         st.stage += 1
-        st.stageAtTime = Date.now()
+        markStageConsumed(st, agent?.session)
         st.lastAdvance = { at: Date.now(), reason: args?.reason ? String(args.reason) : null }
         saveStageState()
         applyStageRestrict(agent, st.stage)
@@ -1165,7 +1178,7 @@ export function apply(ctx, config) {
       execute: async () => {
         const st = (ensureStage()[sid] ??= { stage: 0, guided: false })
         st.stage = 0
-        st.stageAtTime = Date.now()
+        markStageConsumed(st, agent?.session)
         saveStageState()
         applyStageRestrict(agent, 0)
         const ownT = toolsSvc?.layers?.scoped?.get?.(agent)?.tools
