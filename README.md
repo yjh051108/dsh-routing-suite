@@ -1,15 +1,27 @@
-# dsh-routing-suite — 注入器 × 思维模式路由 套装
+# dsh-routing-suite — 注入器 × 思维模式路由 × 分级模式 套装
 
-一个仓库装齐「运行时手术台 + 思维模式路由预设」：先装注入器（免重启运行时管理层），
-再用它装配 router-standard 预设（任务感知思维模式路由，P1-P23 实测）。
+一个仓库装齐三件套：**运行时注入器**（免重启运行时管理层）+
+**思维模式路由预设**（任务感知推理模式，P1-P23 实测）+
+**分级任务协议**（脑暴出题 → 规格化计划 → 打卡制 → 组收官 → 终验，含红队门与审计端点）。
 
 [中文](README.md) | [English](README.en.md)
+
+## 组件入口（快速跳转）
+
+| 组件 | 说明 | 入口 |
+|---|---|---|
+| **injector** | 运行时注入器：`dev_*` 工具全家桶（注入/热重载/卸载/侧挂转正/路由自愈） | [injector/README.md](injector/README.md) · [文档](injector/docs/SPEC.md) |
+| **preset** | 思维模式路由预设（router-standard / router-spec，按模型 persona 路由） | [preset/README.md](preset/README.md) · [实验报告](preset/docs/experiments.md) |
+| **graded** | 分级模式：会话级两级任务协议（6 工具+三模式+小类模式粒度+红队门+审计端点+超级面板） | [graded/README.md](graded/README.md) · [架构](graded/docs/ARCHITECTURE.md) · [理论](graded/docs/THEORY.md) · [实测数据](graded/docs/DATA.md) |
 
 ## 一键安装
 
 ```powershell
 dsh plugin --profile web add github:yjh051108/dsh-routing-suite
 ```
+
+> 本套装已含上述三组件（injector/preset/graded 均为仓库内普通目录，内容直接入库）；
+> graded 发布物：`graded/dsh-external-dsh-graded-mode-0.0.1-exp.tgz`（或 Release 附件）。
 
 **DSH Target**：`>=0.1.0-rc.6 <0.2.0`（已跟进 rc.8 / 0.1.1-rc.2 / 0.1.2-alpha.1）
 

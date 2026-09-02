@@ -1,10 +1,19 @@
-# dsh-routing-suite — Injector × Reasoning-Mode Routing Suite
+# dsh-routing-suite — Injector × Reasoning-Mode Routing × Graded Mode Suite
 
-One repository for the full stack: the **runtime surgery table** (dsh-super-injector,
-restart-free plugin management) plus the **reasoning-mode routing presets**
-(dsh-router-standard: task-aware reasoning-mode routing).
+One repository for the full stack: the **runtime injector** (restart-free plugin
+management) plus the **reasoning-mode routing presets** (task-aware reasoning-mode
+routing, measured P1-P23) plus the **graded task protocol** (brainstorm quiz →
+speced plan → check-in → group close-out → final check, with redteam gate & audit endpoint).
 
 [中文](README.md) | English
+
+## Component entry points
+
+| Component | Description | Entry |
+|---|---|---|
+| **injector** | Runtime injector: `dev_*` tool family (inject / hot-reload / uninject / staging / route self-heal) | [injector/README.md](injector/README.md) · [SPEC](injector/docs/SPEC.md) |
+| **preset** | Reasoning-mode routing presets (router-standard / router-spec, persona-based routing) | [preset/README.md](preset/README.md) · [experiments](preset/docs/experiments.md) |
+| **graded** | Graded mode: session-level two-level task protocol (6 tools + 3 modes + per-item mode + redteam gate + audit endpoint + super panel) | [graded/README.md](graded/README.md) · [ARCHITECTURE](graded/docs/ARCHITECTURE.md) · [THEORY](graded/docs/THEORY.md) · [DATA](graded/docs/DATA.md) |
 
 ## Install chain (three steps)
 
