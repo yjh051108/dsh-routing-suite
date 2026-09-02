@@ -1,4 +1,4 @@
-# dsh-graded-mode v3.2.0 版本说明（体验增强版）
+# dsh-graded-mode v0.0.1-exp 版本说明（体验实验版，原 3.2.0）
 
 - 基线：v3.1.0（备份 <backup-dir>\\dsh-graded-mode-v3.1.0）
 - 测试：61/61（mode-state / tools / inject-text）
