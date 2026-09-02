@@ -225,6 +225,27 @@ export function onReviewApproved(prev) {
   }
 }
 
+/** 概念上限（动态：全局 graded-settings.json + 会话覆盖 .settings.json——面板设置同一数据源）。 */
+export function loadConceptLimit(sid) {
+  try {
+    const root = process.env.DSH_HOME || join(homedir(), '.dsh')
+    const g = JSON.parse(readFileSync(join(root, 'graded-settings.json'), 'utf8'))
+    const s = sid ? JSON.parse(readFileSync(join(root, 'graded-state', String(sid).replace(/[^a-zA-Z0-9-]/g, '_') + '.settings.json'), 'utf8')) : {}
+    const n = Number(s.conceptLimit ?? g.conceptLimit ?? 3)
+    return Number.isInteger(n) && n >= 3 && n <= 8 ? n : 3
+  } catch { return 3 }
+}
+/** 检测模式（全局+会话覆盖；auto|self-redteam|subagent）。 */
+export function loadVerifyMode(sid) {
+  try {
+    const root = process.env.DSH_HOME || join(homedir(), '.dsh')
+    const g = JSON.parse(readFileSync(join(root, 'graded-settings.json'), 'utf8'))
+    const s = sid ? JSON.parse(readFileSync(join(root, 'graded-state', String(sid).replace(/[^a-zA-Z0-9-]/g, '_') + '.settings.json'), 'utf8')) : {}
+    const m = s.verifyMode ?? g.verifyMode ?? 'auto'
+    return ['auto', 'self-redteam', 'subagent'].includes(m) ? m : 'auto'
+  } catch { return 'auto' }
+}
+
 /** 拒绝/重走时清理开发期注入键（防 focus/check/final/kickoff/reject-ack 残留导致重新确认后不再注入）。 */
 export function stripDevelopMarkers(injected) {
   const out = new Set()

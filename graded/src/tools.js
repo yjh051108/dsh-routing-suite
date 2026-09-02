@@ -22,7 +22,7 @@
 import {
   assertL1Items, assertL2Groups, onEditL1, onEditL2, onLockL1, onLockL2,
   onReviewApproved, onReviewRejected, onMark, onCommitStar, onRedteamVerdict, onReviseDo,
-  treeText, groupDone, allDone, currentFocus,
+  treeText, groupDone, loadConceptLimit, loadVerifyMode, allDone, currentFocus,
   trigger, initMode, loadState, saveState,
 } from './mode-state.js'
 import { focusL2, focusL2GroupOpen, focusL2Last, groupCheck, finalCheck, phaseL2, reviewPendingText, specSheet } from './inject-text.js'
@@ -284,6 +284,10 @@ function registerInjected(sid, key) {
   } catch { /* 幂等 */ }
 }
 
+/** 同 turn 引导合并（60ms 窗口只发最新一条——连续打卡不把引导叠进 next-step 队列）。 */
+const pendingGuide = new Map()
+const guideTimers = new Map()
+
 /** lock_stage：锁定当前层。L1 锁 → 切 L2 编辑；L2 锁 → 全门关,自动弹树状审核。 */
 export function lockStageDefinition(deps) {
   return {
@@ -314,7 +318,7 @@ export function lockStageDefinition(deps) {
         try {
           exec?.agent?.steer?.({
             id: 'graded-follow-' + Date.now() + '-' + Math.floor(Math.random() * 1e6),
-            role: 'user', content: [{ type: 'text', text: phaseL2(cur.mode) }],
+            role: 'user', content: [{ type: 'text', text: phaseL2(cur.mode, loadConceptLimit(sid)) }],
             source: { kind: 'plugin', plugin: 'dsh-graded-mode' },
           })
           registerInjected(sid, 'l2-guidance')
@@ -459,20 +463,31 @@ export function markTaskDefinition(deps) {
         const msg = deferCount > 2
           ? `【自动续轮已暂停】「${title}」已连续打卡多次——暂停自动续轮，请停在这里等用户指令。`
           : (text || null)
-        // 续轮驱动：用 agent.followup（inbox 级,跨 turn）而非 deferContext（仅 step 内）——
-        // Code 模式(run_code)下 deferContext 随 turn 结束失效 → 引导滞后；followup 在 turn 边界
-        // 仍有 pending → 自动下一轮（无需用户消息）
-        // 双注防治：**followup 成功后**才注册幂等键（先注后键）——pre-step splice 通道见键跳过；
+        // 续轮驱动（v3.2 修正）：**steer=next-step**——同轮下一步即消费，不留 next-turn 堆积；
+        // 且**同 turn 多条引导合并**（60ms 窗口只发最新一条——连续打卡不会把引导叠进队列）
+        // 双注防治：**投递成功后**才注册幂等键（先注后键）——pre-step splice 通道见键跳过；
         // 失败则不注册 → pre-step 兜底 splice,引导不丢
         try {
           if (msg) {
-            exec?.agent?.followup?.({
-              id: 'graded-follow-' + Date.now() + '-' + Math.floor(Math.random() * 1e6),
-              role: 'user',
-              content: [{ type: 'text', text: msg }],
-              source: { kind: 'plugin', plugin: 'dsh-graded-mode' },
-            })
-            if (effectiveGuide) registerInjected(sid, effectiveGuide.key)
+            const pendingKey = sid + '|guide'
+            pendingGuide.set(pendingKey, { msg, key: effectiveGuide?.key, agent: exec?.agent })
+            if (!guideTimers.has(pendingKey)) {
+              guideTimers.set(pendingKey, setTimeout(() => {
+                guideTimers.delete(pendingKey)
+                const p = pendingGuide.get(pendingKey)
+                pendingGuide.delete(pendingKey)
+                if (!p || !p.msg) return
+                try {
+                  p.agent?.steer?.({
+                    id: 'graded-guide-' + Date.now() + '-' + Math.floor(Math.random() * 1e6),
+                    role: 'user',
+                    content: [{ type: 'text', text: p.msg }],
+                    source: { kind: 'plugin', plugin: 'dsh-graded-mode' },
+                  })
+                  if (p.key) registerInjected(sid, p.key)
+                } catch { /* 投递失败不阻断（键未注册 → pre-step 兜底补） */ }
+              }, 60))
+            }
           }
         } catch { /* 续轮失败不阻断（键未注册 → pre-step 兜底补） */ }
       } catch { /* 引导失败不阻断 */ }

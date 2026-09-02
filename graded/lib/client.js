@@ -178,18 +178,75 @@ window.__ModuleLoader__.load({
       )
     }
 
+    function SettingPanel({ sid, onClose, onSwitch }) {
+      const [st, setSt] = useState(null)
+      const [scope, setScope] = useState("global")
+      const [limit, setLimit] = useState(3)
+      const [vm, setVm] = useState("auto")
+      const [saved, setSaved] = useState(false)
+      const [err, setErr] = useState(null)
+      const [sessions, setSessions] = useState([])
+      useEffect(() => {
+        let alive = true
+        const qs = sid ? "?sid=" + encodeURIComponent(sid) : ""
+        fetch("/graded-mode/api/settings" + qs).then((r) => r.json()).then((j) => { if (alive && j && j.conceptLimit !== undefined) { setLimit(j.conceptLimit); setVm(j.verifyMode); setSt(j) } }).catch(() => {})
+        fetch("/graded-mode/api/sessions").then((r) => r.json()).then((j) => { if (alive && j && j.ok) setSessions(j.sessions) }).catch(() => {})
+        return () => { alive = false }
+      }, [sid])
+      const save = () => {
+        const qs = "?scope=" + scope + (scope === "session" && sid ? "&sid=" + encodeURIComponent(sid) : "")
+        fetch("/graded-mode/api/settings" + qs, {
+          method: "PUT",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ conceptLimit: limit, verifyMode: vm }),
+        }).then((r) => r.json()).then((j) => { if (j && j.ok) { setSaved(true); setErr(null); setTimeout(() => setSaved(false), 1200) } else { setErr(j?.error || "保存失败") } }).catch((e) => setErr(String(e)))
+      }
+      const row = (label, node) => e("div", { style: { display: "flex", alignItems: "center", gap: "8px", margin: "6px 0" } }, e("span", { style: { width: "72px", fontSize: "12px" } }, label), node)
+      return e("div", { style: { borderTop: "1px solid #ddd", padding: "8px", background: "#fff" } },
+        e("div", { style: { fontWeight: "700", marginBottom: "4px" } }, "⚙ 设置"),
+        e("div", { style: { display: "flex", alignItems: "center", gap: "8px", margin: "6px 0", fontSize: "12px" } },
+          e("span", { style: { width: "72px" } }, "会话"),
+          e("select", { value: sid || "", onChange: (ev) => { if (ev.target.value && onSwitch) onSwitch(ev.target.value) }, style: { fontSize: "12px", maxWidth: "260px" } },
+            e("option", { value: "" }, sid ? "当前会话" : "（无）"),
+            (sessions || []).map((x) => e("option", { key: x.sid, value: x.sid }, x.sid.replace(/^session-/, "").slice(0, 8) + " · " + x.stage + (x.task ? " · " + x.task : ""))))),
+        row("作用域", e("div", { style: { display: "flex", gap: "10px", fontSize: "12px" } },
+          ["global", "session"].map((s) =>
+            e("label", { key: s }, e("input", { type: "radio", checked: scope === s, onChange: () => setScope(s) }), s === "global" ? "全局" : "本会话")))),
+        row("概念上限", e("input", { type: "range", min: 3, max: 8, value: limit, onChange: (ev) => setLimit(Number(ev.target.value)) }, "  " + limit)),
+        row("检测模式", e("select", { value: vm, onChange: (ev) => setVm(ev.target.value), style: { fontSize: "12px" } },
+          e("option", { value: "auto" }, "自决策（默认，成本最低）"),
+          e("option", { value: "self-redteam" }, "单自红队（每小类裁决）"),
+          e("option", { value: "subagent" }, "单 subagent（每小类委派）"))),
+        err ? e("div", { style: { color: "#c0392b", fontSize: "12px" } }, err) : null,
+        saved ? e("span", { style: { color: "#2a9d6e", fontSize: "12px" } }, " ✓ 已保存（下次会话生效）") :
+          e("button", { onClick: save, style: { fontSize: "12px", padding: "2px 10px", marginTop: "4px" } }, "保存"),
+        e("button", { onClick: onClose, style: { fontSize: "12px", padding: "2px 10px", marginLeft: "8px" } }, "关闭"))
+    }
+
     function ProgressBadge() {
       const [st, setSt] = useState(null)
       const [open, setOpen] = useState(false)
+      const [settings, setSettings] = useState(false)
+      const badSid = null
+      const getSid = () => {
+        const raw = typeof location !== "undefined" ? location.href : ""
+        const hit = raw.match(/(session-)?[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/) ||
+          (typeof history !== "undefined" && history.state && JSON.stringify(history.state).match(/(session-)?[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/)) ||
+          null
+        return hit ? (hit[0].startsWith("session-") ? hit[0] : "session-" + hit[0]) : null
+      }
+      const sid = st && st.sid ? st.sid : getSid()
+      const urlSid = sid
       useEffect(() => {
         let alive = true
         const tick = () => {
-          fetch("/graded-mode/api/state").then((r) => r.json()).then((j) => { if (alive) setSt(j) }).catch(() => {})
+          const qs = urlSid ? "?sid=" + encodeURIComponent(urlSid) : ""
+          fetch("/graded-mode/api/state" + qs).then((r) => r.json()).then((j) => { if (alive) setSt(j) }).catch(() => {})
         }
         tick()
-        const id = setInterval(tick, 4000)
+        const id = setInterval(tick, 2000) // 2s：切换可见性更快（原 4s）
         return () => { alive = false; clearInterval(id) }
-      }, [])
+      }, [urlSid])
       if (!st || !st.ok) return null
       if (st.stage === "off") return null
       const stageLabel = STAGE_LABEL[st.stage] || st.stage
@@ -225,7 +282,10 @@ window.__ModuleLoader__.load({
           e("div", { className: "graded-hint", style: { marginBottom: "4px" } },
             "红队: 通过 " + (rt.passed || 0) + " · 打回 " + (rt.rejected || 0) + " · 轮次 " + (rt.rounds || 0) + (rt.pending ? " · 待验 " + rt.pending : "")),
           e(SpecTree, { plan: st.plan }),
-          e("div", { className: "graded-hint", style: { marginTop: "6px" } }, "点击徽章收起 · 数据来自 /graded-mode/api/state"),
+          e("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "6px" } },
+            e("span", { className: "graded-hint" }, "点击徽章收起 · 数据来自 /graded-mode/api/state"),
+            e("button", { onClick: () => setSettings((s) => !s), style: { fontSize: "12px", padding: "2px 8px" } }, "⚙ 设置")),
+          settings && e(Safe(SettingPanel), { sid: (st.sid || urlSid) ? (st.sid || urlSid) : null, onClose: () => setSettings(false), onSwitch: (nsid) => { setSt(null); if (nsid) { const qs = "?sid=" + encodeURIComponent(nsid); fetch("/graded-mode/api/state" + qs).then((r) => r.json()).then((j) => { if (j && j.ok) setSt(j) }).catch(() => {}) } } }),
         ),
       )
     }

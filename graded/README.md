@@ -55,7 +55,7 @@ DSH_HOME='<DSH_HOME>' node <NPM_GLOBAL>/@deepseek-ai/dsh/lib/bin.js plugin --pro
 
 ## 开发与测试
 
-- 测试：`npm install`（依赖声明 `@deepseek-ai/schemastery`）后 `npm test`（mode-state/tools/inject-text 三文件 62/62）
+- 测试：`npm install`（依赖声明 `@deepseek-ai/schemastery`）后 `npm test`（mode-state/tools/inject-text 三文件 62 项）
 - 构建：`node scripts/build.mjs`（产出 `lib/`）
 - E2E 自验：`scripts/e2e-3.1.mjs`（全链 dogfood）/ `scripts/e2e-redteam-group.mjs`（组级红队链）
 - 热重载：`dev_reload_package dsh-graded-mode`（零重启）

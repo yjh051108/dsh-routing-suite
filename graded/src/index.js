@@ -22,9 +22,9 @@
  * 任何阶段工具不缺失（工具缺失=标定断裂）；激活/阶段校验在 execute 内兜底。
  */
 import { initMode, trigger, deactivate, onReviewApproved, onReviewRejected,
-  currentFocus, groupDone, allDone, treeText, serializeState,
+  currentFocus, groupDone, allDone, treeText, serializeState, loadConceptLimit, loadVerifyMode,
   loadState, saveState } from './mode-state.js'
-import { mkdirSync, writeFileSync, existsSync } from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { homedir } from 'node:os'
 import { createHash } from 'node:crypto'
@@ -32,6 +32,20 @@ import { createHash } from 'node:crypto'
 /** 默认 DSH_HOME（运行时计算——不硬编码用户名/盘符；脱敏：真实主目录由 os.homedir() 提供）。 */
 function defaultDshHome() {
   return join(homedir(), '.dsh')
+}
+
+/** 盘档 mtime 最新的会话（重启后零等待恢复——不依赖内存 activeSid；最多扫 200 文件）。 */
+function latestStateSid() {
+  try {
+    const dir = join(process.env.DSH_HOME || defaultDshHome(), 'graded-state')
+    const files = readdirSync(dir).filter((f) => f.endsWith('.json')).slice(0, 200)
+    let best = null, bestM = -1
+    for (const f of files) {
+      const m = statSync(join(dir, f)).mtimeMs
+      if (m > bestM) { bestM = m; best = f.replace(/\.json$/, '') }
+    }
+    return best
+  } catch { return null }
 }
 import { editPlanDefinition, lockStageDefinition, markTaskDefinition, commitStarDefinition, redteamVerdictDefinition, reviseDoDefinition } from './tools.js'
 import { phaseL1, phaseL2, reviewPendingText, approvedToDevelop, approvedKickoff, brainStormText, focusL2, focusL2GroupOpen, focusL2Last, groupCheck, finalCheck, modeName, starPurpose, offReceipt, rejectAck } from './inject-text.js'
@@ -117,6 +131,7 @@ export function auditBody(state) {
     redteam: rt,
     uniqueRate: keys.length === 0 ? 0 : 1 - dupKeys.length / keys.length,
     dupKeys: [...new Set(dupKeys)],
+    settings: { conceptLimit: state?.conceptLimit ?? null, verifyMode: state?.verifyMode ?? null }, // 审计含设置摘要（调用方填充）
   }
 }
 
@@ -137,8 +152,11 @@ export function apply(ctx, config) {
       writeFileSync(stateFile(sid), JSON.stringify(serializeState(initMode())), 'utf-8')
     } catch { /* 幂等 */ }
   }
-  function stateFile(sid) {
+  function stateFileRaw(sid) {
     return join(process.env.DSH_HOME || defaultDshHome(), 'graded-state', String(sid).replace(/[^a-zA-Z0-9-]/g, '_') + '.json')
+  }
+  function stateFile(sid) {
+    return stateFileRaw(sid)
   }
 
   /* ---------- 完成情况面板 API（client 进度面板消费；常量路由 + 最近活跃 sid） ---------- */
@@ -170,28 +188,140 @@ export function apply(ctx, config) {
     plan: s.plan,   // 3.1 面板三层树：完整规格（组/小类 spec/accept/do/verify/redteam 历史）
     star: s.star,   // 北极星栏（面板顶层常驻）
   })
-  ctx.effect(() => ctx.webServer.register({
-    kind: 'prefix',
-    path: '/graded-mode/api',
-    handler: async (_req, res) => {
-      const s = activeSid ? state(activeSid) : initMode()
-      const body = JSON.stringify({ ok: true, sid: activeSid, ...apiProgress(s) })
-      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-      res.end(body)
-    },
-  }), 'graded-mode: state api')
+  /* ---------- 设置（两级：全局 settings.json + 会话覆盖） ---------- */
+
+  const DEFAULT_SETTINGS = { conceptLimit: 3, verifyMode: 'auto' } // auto=自决策 | self-redteam | subagent
+  const VERIFY_MODES = ['auto', 'self-redteam', 'subagent']
+
+  function settingsFile() {
+    return join(process.env.DSH_HOME || defaultDshHome(), 'graded-settings.json')
+  }
+  function sessionSettingsFile(sid) {
+    return join(process.env.DSH_HOME || defaultDshHome(), 'graded-state', String(sid).replace(/[^a-zA-Z0-9-]/g, '_') + '.settings.json')
+  }
+  function loadGlobalSettings() {
+    try { return { ...DEFAULT_SETTINGS, ...JSON.parse(readFileSync(settingsFile(), 'utf8')) } }
+    catch { return { ...DEFAULT_SETTINGS } }
+  }
+  function loadSessionSettings(sid) {
+    try { return sid ? (JSON.parse(readFileSync(sessionSettingsFile(sid), 'utf8')) || {}) : {} }
+    catch { return {} }
+  }
+  function settingsFor(sid) {
+    const g = loadGlobalSettings()
+    const s = loadSessionSettings(sid)
+    return {
+      global: g, session: s,
+      conceptLimit: s.conceptLimit ?? g.conceptLimit,
+      verifyMode: s.verifyMode ?? g.verifyMode,
+    }
+  }
+  function validSettings(patch) {
+    if (patch.conceptLimit !== undefined) {
+      const n = Number(patch.conceptLimit)
+      if (!Number.isInteger(n) || n < 3 || n > 8) return 'conceptLimit 须为 3-8 整数'
+    }
+    if (patch.verifyMode !== undefined && !VERIFY_MODES.includes(patch.verifyMode)) return 'verifyMode 须为 auto|self-redteam|subagent'
+    return null
+  }
+
+  ctx.effect(() => {
+    const d = ctx.webServer.register({
+      kind: 'prefix',
+      path: '/graded-mode/api/settings',
+      handler: async (req, res) => {
+      const q = new URL(req.url, 'http://x')
+      const sid = q.searchParams.get('sid')
+      const json = (o, code = 200) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(o)) }
+      const scope = q.searchParams.get('scope')
+      if (req.method === 'GET') return json(settingsFor(sid))
+      if (req.method === 'PUT') {
+        let raw = ''
+        try { for await (const c of req) raw += c } catch { /* */ }
+        let patch
+        try { patch = JSON.parse(raw || '{}') } catch { return json({ ok: false, error: 'body 非 JSON' }, 400) }
+        const err = validSettings(patch)
+        if (err) return json({ ok: false, error: err }, 400)
+        const target = (patch.scope === 'session' || scope === 'session') && sid ? 'session' : 'global'
+        if (target === 'global') {
+          const cur = loadGlobalSettings()
+          if (patch.conceptLimit !== undefined) cur.conceptLimit = patch.conceptLimit
+          if (patch.verifyMode !== undefined) cur.verifyMode = patch.verifyMode
+          try { writeFileSync(settingsFile(), JSON.stringify(cur, null, 2), 'utf-8'); return json({ ok: true, scope: 'global', settings: cur }) }
+          catch (e) { return json({ ok: false, error: '写盘失败: ' + e.message }, 500) }
+        } else {
+          const cur = loadSessionSettings(sid)
+          if (patch.conceptLimit !== undefined) cur.conceptLimit = patch.conceptLimit
+          if (patch.verifyMode !== undefined) cur.verifyMode = patch.verifyMode
+          try {
+            writeFileSync(sessionSettingsFile(sid), JSON.stringify(cur, null, 2), 'utf-8')
+            return json({ ok: true, scope: 'session', settings: settingsFor(sid) })
+          } catch (e) { return json({ ok: false, error: '写盘失败: ' + e.message }, 500) }
+        }
+      }
+      return json({ ok: false, error: 'method 仅 GET/PUT' }, 405)
+      }
+    }, 'graded-mode: settings api')
+    return () => d()
+  })
+
+  ctx.effect(() => {
+    const d = ctx.webServer.register({
+      kind: 'prefix',
+      path: '/graded-mode/api/sessions',
+      handler: async (_req, res) => {
+        // 全部盘档会话清单（面板下拉切换用）——mtime 降序
+        try {
+          const dir = join(process.env.DSH_HOME || defaultDshHome(), 'graded-state')
+          const list = readdirSync(dir).filter((f) => /^session-[\w-]+\.json$/.test(f))
+            .map((f) => { const id = f.replace(/\.json$/, ''); const s = state(id) || initMode(); return { sid: id, stage: s.stage, task: (s.task || '').slice(0, 40), mtime: statSync(join(dir, f)).mtimeMs } })
+            .sort((a, b) => b.mtime - a.mtime)
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+          res.end(JSON.stringify({ ok: true, sessions: list }))
+        } catch (e) {
+          res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' })
+          res.end(JSON.stringify({ ok: false, error: String(e) }))
+        }
+      },
+    }, 'graded-mode: sessions api')
+    return () => d()
+  })
+
+  ctx.effect(() => {
+    const d = ctx.webServer.register({
+      kind: 'prefix',
+      path: '/graded-mode/api',
+      handler: async (_req, res) => {
+        // 会话选择优先级：?sid= 显式（前端从 URL/历史解析）> 最近活跃（内存/命令）> 盘档 mtime 最新（重启零等待恢复）
+        const q = new URL(_req.url, 'http://x').searchParams.get('sid')
+        const sid = q || activeSid || latestStateSid()
+        const s = sid ? state(sid) : initMode()
+        // 防错显示：显式 sid 但无盘档 → ok:false（客户端不渲染徽章，绝不显示错会话）
+        const bad = q && !existsSync(stateFileRaw(q)) ? false : true
+        const body = JSON.stringify(bad ? { ok: true, sid, ...apiProgress(s) } : { ok: false, sid: q, reason: 'no-state' })
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+        res.end(body)
+      },
+    }, 'graded-mode: state api')
+    return () => d()
+  })
 
   /* ---------- 审计端点（/api/audit：注入计数/指纹/红队——检测类任务一眼可见） ---------- */
-  ctx.effect(() => ctx.webServer.register({
-    kind: 'prefix',
-    path: '/graded-mode/api/audit',
-    handler: async (_req, res) => {
-      const s = activeSid ? state(activeSid) : initMode()
-      const body = JSON.stringify({ ...auditBody(s), sid: activeSid })
-      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-      res.end(body)
-    },
-  }), 'graded-mode: audit api')
+  ctx.effect(() => {
+    const d = ctx.webServer.register({
+      kind: 'prefix',
+      path: '/graded-mode/api/audit',
+      handler: async (_req, res) => {
+        const q = new URL(_req.url, 'http://x').searchParams.get('sid')
+        const sid = q || activeSid || latestStateSid()
+        const s = sid ? state(sid) : initMode()
+        const body = JSON.stringify({ ...auditBody({ ...s, conceptLimit: loadConceptLimit(sid), verifyMode: loadVerifyMode(sid) }), sid })
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+        res.end(body)
+      },
+    }, 'graded-mode: audit api')
+    return () => d()
+  })
 
   /* ---------- 工具注册（全局常驻;execute 走磁盘权威,激活/阶段校验在 execute 内） ---------- */
 
@@ -412,7 +542,7 @@ export function apply(ctx, config) {
       } else if (s.stage === 'l2-edit') {
         if (!s.injected.has('l2-guidance')) {
           s.injected.add('l2-guidance')
-          spliceInjection(decision, userMsg(phaseL2(s.mode)))
+          spliceInjection(decision, userMsg(phaseL2(s.mode, loadConceptLimit(sid2))))
         }
       } else if (s.stage === 'review') {
         // 文本通道审核：等待用户回复『确认』/『修改』（pre-step 前半扫描翻转；规格单已在锁定回执呈现）
@@ -441,7 +571,9 @@ export function apply(ctx, config) {
           // 正常焦点：开头/结尾小类注入略有不同（每大类的入口/出口语义）
           const focus = currentFocus(s.plan)
           if (focus) {
-            const key = 'focus:' + focus.group.title + ':' + focus.item.title + ':' + focus.item.status
+            // 幂等键不含 status：同一小类状态翻转（误标/回滚等抖动）不再重注同名引导——
+            // 回滚场景由 stripDevelopMarkers 清 focus:* 恢复可注（误标修正仍需引导）
+            const key = 'focus:' + focus.group.title + ':' + focus.item.title
             if (!s.injected.has(key)) {
               s.injected.add(key)
               const idx = (focus.group.items || []).indexOf(focus.item)

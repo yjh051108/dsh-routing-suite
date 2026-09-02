@@ -118,11 +118,11 @@ ${DELEGATE_ONCE}
 ⭐ **打卡制（本模式的元规则）**：这不是北极星——看着方向不算完成。每一小类都是一个打卡点：交付物可见可验 → **打卡**（调 **mark_task** 标记完成）→ **打卡既放行下一步，也换来下一步的正确引导**——不打卡 = 没完成 = 没有引导可接。`
 }
 
-/** L2-EDIT：三概念分化（携带当前模式提示,让小类单元定义对齐模式）。 */
-export function phaseL2(mode = 'correct') {
-  return `【分级·第二步】大类已锁定。现在把每个大类分化成小类（本会话模式：${modeName(mode)}）：
+/** L2-EDIT：三概念分化（携带当前模式提示,让小类单元定义对齐模式；conceptLimit 可随设置）。 */
+export function phaseL2(mode = 'correct', conceptLimit = 3) {
+  return `【分级·第二步】大类已锁定。现在把每个大类分化成小类（本会话模式：${modeName(mode)}；概念上限：${conceptLimit}，随面板设置）：
 ① 一个小类 = 一个"能一截图/一运行独立验证"的完成单元（独立交付物，不是步骤）——按本模式定义"验证"：${modeCenter(mode)}。
-② 每个小类 ≤3 个核心概念（记在 concepts 里，超 3 个就拆成两个小类）。
+② 每个小类 ≤${conceptLimit} 个核心概念（记在 concepts 里，超 ${conceptLimit} 个就拆成两个小类）。
 ③ 小类名是纯名词短语，不要重复大类词（大类"分析"，小类就写"双注入核验"，别写"分析——双注入核验"）。
 ④ 调 **edit_plan**（level="L2"，groups[].items 完整树，大类名必须与已锁定的一致）写完当场展示。
 ⑤ 全部小类确认后调 **lock_stage**（level="L2"）——所有门关闭，会自动弹出树状图审核确认。`
@@ -176,6 +176,13 @@ const DELEGATE_ONCE = `（能力与纪律提示·供自行判断,非每步任务
 · **实例用后即回收**：浏览器/服务/进程单例 + 用完即关，防资源泄漏。
 · **环境先指认**：验证失败先怀疑"环境陈旧"（旧进程/旧端口/旧产物/缓存），确认服务与产物是新的再改代码。
 · **脚本先自测**：验证脚本自身先跑通小样例/对照常量表，防"裁判=选手"的脚本笔误吞轮次。`
+
+/** 检测模式提示行（verify 倾向随面板设置；auto=无提示=现状）。 */
+export function verifyHint(vm) {
+  if (vm === 'self-redteam') return '【检测模式：单自红队】——本小类验收建议先走自演红队裁决（verify=redteam）；未裁决通过不得打卡。'
+  if (vm === 'subagent') return '【检测模式：单 subagent】——本小类建议委派子代理执行（do=subagent）；回收证据后按盘档标准独立验收。'
+  return ''
+}
 
 /** 北极星锚定行（开工前一眼——替代"开工前自问"式声明：锚=目的+本小类验收锚）。 */
 export function starAnchor(item, purpose) {
@@ -277,24 +284,24 @@ export function formSection(item) {
 }
 
 /** develop：当前小类焦点注入——**规格前置三段式**（任务 spec → 验收 accept → 执行形态 → 北极星锚定 → 铁律 → 打卡 → 门禁）。item.mode 优先于会话模式（小类粒度自定义）。 */
-export function focusL2(groupTitle, item, prevTitle, mode = 'correct', purpose = '') {
+export function focusL2(groupTitle, item, prevTitle, mode = 'correct', purpose = '', limit = 3, verifyMode = 'auto') {
   const prev = prevTitle ? `上一小类「${prevTitle}」已打卡 ✅；` : ''
   const m = item.mode || mode
   const acc = (item.accept || []).map((a) => `  · ${a}`).join('\n') || '  · （无——先声明两句话再开工）'
-  return `【当前小类·${groupTitle}】${prev}现在专注完成「${item.title}」${item.concepts?.length ? `（核心概念：${item.concepts.join('、')}）` : ''}。
+  return `【当前小类·${groupTitle}】${prev}【概念上限：${limit || 3}】现在专注完成「${item.title}」${item.concepts?.length ? `（核心概念：${item.concepts.join('、')}）` : ''}。
 【本小类任务】${item.spec || item.title}
 【本小类验收标准】（开局已锁,打卡前逐条对照；本小类模式：${modeName(m)}；
 ${acc}
 ${formSection(item)}
-你的岗位：**唯一推进负责人**——对规格负责（做/派/编均需自验后打卡）。
+你的岗位：**唯一推进负责人**——对规格负责（做/派/编均需自验后打卡）。\n（做/派/编均需自验后打卡）。
 ${starAnchor(item, purpose)}
-${verifyLaw(m)}
+${verifyHint(verifyMode)}\n${verifyLaw(m)}
 然后**打卡**：调 **mark_task**(level="L2", title="${item.title}", status="completed")——唯一前进许可，**也是获取下一步正确引导的钥匙**。
 **单类门禁**：务必专注当前小类任务；其余小类一切内容=禁入区（"反正都要写""先搭骨架""相互依赖"等借口直接违规）；不得为了提高效率一次完成多个小类——小类完成后打卡，即自动引导下一个小类。`
 }
 
 /** develop：大类入口——上一大类已标定,进入新大类,专注第一小类（规格前置同构；组入口前置北极星浓缩版）。 */
-export function focusL2GroupOpen(groupTitle, item, mode = 'correct', purpose = '') {
+export function focusL2GroupOpen(groupTitle, item, mode = 'correct', purpose = '', limit = 3, verifyMode = 'auto') {
   const m = item.mode || mode
   const acc = (item.accept || []).map((a) => `  · ${a}`).join('\n') || '  · （无——先声明两句话再开工）'
   const star = purpose ? `${northStarShort({ star: { purpose } }, item)}\n` : ''
@@ -303,26 +310,26 @@ export function focusL2GroupOpen(groupTitle, item, mode = 'correct', purpose = '
 【本小类验收标准】（开局已锁,打卡前逐条对照；本小类模式：${modeName(m)}；
 ${acc}
 ${formSection(item)}
-你的岗位：**唯一推进负责人**——对规格负责（做/派/编均需自验后打卡）。
+你的岗位：**唯一推进负责人**——对规格负责（做/派/编均需自验后打卡）。\n（做/派/编均需自验后打卡）。
 ${starAnchor(item, purpose)}
-${verifyLaw(m)}
+${verifyHint(verifyMode)}\n${verifyLaw(m)}
 然后**打卡**：调 **mark_task**(level="L2", title="${item.title}", status="completed")——唯一前进许可，**也是获取下一步正确引导的钥匙**。
 **单类门禁**：务必专注当前小类任务；其余小类一切内容=禁入区（"反正都要写""先搭骨架""相互依赖"等借口直接违规）；不得为了提高效率一次完成多个小类——小类完成后打卡，即自动引导下一个小类。`
 }
 
 /** develop：大类出口——本大类最后一个小类（完成后→即停→等下一步引导自动到来）。 */
-export function focusL2Last(groupTitle, item, prevTitle, mode = 'correct', purpose = '') {
+export function focusL2Last(groupTitle, item, prevTitle, mode = 'correct', purpose = '', limit = 3, verifyMode = 'auto') {
   const prev = prevTitle ? `上一小类「${prevTitle}」已打卡 ✅；` : ''
   const m = item.mode || mode
   const acc = (item.accept || []).map((a) => `  · ${a}`).join('\n') || '  · （无——先声明两句话再开工）'
-  return `【当前小类·${groupTitle}】${prev}现在专注完成「${item.title}」${item.concepts?.length ? `（核心概念：${item.concepts.join('、')}）` : ''}——**这是本大类最后一个小类**。
+  return `【当前小类·${groupTitle}】${prev}【概念上限：${limit || 3}】现在专注完成「${item.title}」${item.concepts?.length ? `（核心概念：${item.concepts.join('、')}）` : ''}——**这是本大类最后一个小类**。
 【本小类任务】${item.spec || item.title}
 【本小类验收标准】（开局已锁,打卡前逐条对照；本小类模式：${modeName(m)}；
 ${acc}
 ${formSection(item)}
-你的岗位：**唯一推进负责人**——对规格负责（做/派/编均需自验后打卡）。
+你的岗位：**唯一推进负责人**——对规格负责（做/派/编均需自验后打卡）。\n（做/派/编均需自验后打卡）。
 ${starAnchor(item, purpose)}
-${verifyLaw(m)}
+${verifyHint(verifyMode)}\n${verifyLaw(m)}
 然后**打卡（只此一个 mark_task）**：调 **mark_task**(level="L2", title="${item.title}", status="completed")——唯一前进许可。
 **单类门禁**：打卡后**即停**——下一步引导（验收/标定）会在打卡后自动到来；**不预判、不抢跑**；每轮只允许一个 mark_task 动作，听引导走。`
 }
