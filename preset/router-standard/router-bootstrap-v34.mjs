@@ -15,7 +15,7 @@
  */
 
 import {
-  bandFor, sessionMode, extractText, isComplexTask,
+  bandFor, sessionMode, extractText, isComplexTask, sessionEvents
 } from './router-core-v34.mjs'
 import { join, dirname } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
@@ -631,7 +631,7 @@ export function apply(ctx, config) {
       : undefined
     if (selectedModel?.model) sessionModels.set(session.id, selectedModel)
 
-    const promoted = session.events.some((event) => event.type === 'tool/call')
+    const promoted = sessionEvents(session).some((event) => event.type === 'tool/call')
     const planSection = (assembled.sections || []).find((s) => /plan/i.test(s.name))
     const baseSections = planSection
       ? [planSection, { name: 'router-persona', text: RL_PERSONA, order: 0 }]
@@ -676,7 +676,7 @@ export function apply(ctx, config) {
     const sid = agent.session.id
     const st = (ensureStage()[sid] ??= { stage: 0, guided: false })
     const stageAt = st.stageAtTime ?? 0
-    const toolCalls = (agent.session.events || []).filter((e) => (e.time === undefined || e.time >= stageAt) && (e.type === 'tool/call' || e.type === 'tool/code-dispatch')).map((e) => ({ name: e.data?.name || e.data?.toolName || '', args: toolArgs(e.data) }))
+    const toolCalls = sessionEvents(agent.session).filter((e) => (e.time === undefined || e.time >= stageAt) && (e.type === 'tool/call' || e.type === 'tool/code-dispatch')).map((e) => ({ name: e.data?.name || e.data?.toolName || '', args: toolArgs(e.data) }))
     // v1.17.2：被拒的锁定工具调用（如阶段 0 调 bash → unknown tool）不算行为信号——
     // 只有当前阶段真实可调（view.visible）的工具调用才触发直达推进。
     let advanceCalls = toolCalls
@@ -1106,7 +1106,7 @@ export function apply(ctx, config) {
       if (!theAgent) throw new Error('goal tools require a calling agent')
       const agentsSvc = ctx.get('agents')
       if (!agentsSvc || agentsSvc.get(theAgent.id) !== theAgent || theAgent.status !== 'running' || (agentsSvc.currentInitiator && agentsSvc.currentInitiator() !== theAgent)) throw new Error('goal tools require the exact live calling agent inside its active driver')
-      const evs = theAgent.session.events || []
+      const evs = sessionEvents(theAgent.session)
       for (let i = evs.length - 1; i >= 0; i--) {
         if (evs[i]?.type === 'turn/end') throw new Error('goal tools require an open model turn')
         if (evs[i]?.type === 'turn/start') return { agent: theAgent, events: evs.slice(i + 1) }

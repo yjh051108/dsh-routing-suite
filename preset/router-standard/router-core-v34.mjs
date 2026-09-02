@@ -147,11 +147,21 @@ export function classifyTask(text) {
 
 /** Per-session mode derived from durable events (resume-safe). */
 export function sessionMode(session) {
-  const events = session.events || []
+  const events = session.events || (typeof session.snapshotEvents === 'function' ? session.snapshotEvents() : [])
   // #13：跳过插件注入的消息（approval/runtime-context/router 引导）——它们不代表任务
   const userMsg = events.find((e) => e.type === 'user/message' && e.data?.source?.kind !== 'plugin')
     ?? events.find((e) => e.type === 'user/message')
   return classifyTask(extractText(userMsg?.data))
+}
+
+// 新增辅助（router-core）：
+export function sessionEvents(session) {
+  if (!session) return []
+  if (Array.isArray(session.events)) return session.events
+  if (typeof session.snapshotEvents === 'function') {
+    try { return session.snapshotEvents() } catch { return [] }
+  }
+  return []
 }
 
 export function extractText(data) {
