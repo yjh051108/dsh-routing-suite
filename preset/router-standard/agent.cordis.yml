@@ -87,6 +87,15 @@
       name: '@deepseek-ai/dsh-tool-bash'
       disabled: !!js process.platform !== 'win32'
 
+# POSIX: agent presets take over the tool manifest, so the host (dsh-base)
+# tool-bash row never enters a preset session — the bash claimed by STAGES
+# stage 3 (verification) fails with 'unknown tool' on macOS/Linux. Register
+# it here; win32 keeps using the gitbash group row above (platform-mutually
+# exclusive, never double-registered).
+- id: tool-bash-posix
+  name: '@deepseek-ai/dsh-tool-bash'
+  disabled: !!js process.platform === 'win32'
+
 - id: tool-pwsh
   name: '@deepseek-ai/dsh-tool-pwsh'
   disabled: !!js process.platform !== 'win32'
