@@ -1,6 +1,13 @@
 # Changelog
 
-## 3.2.0（2026-09-02）体验增强版
+## 0.0.1-rc1（2026-09-02）Release Candidate
+- 注入淤积根治：focus 幂等键去 status（状态抖动不再重注同名引导）；执行端续轮 followup→steer + 同 turn 60ms 引导合并（消除 next-turn 堆积）
+- 面板稳定：会话感知三级回退（URL/历史解析 ?sid=/盘 mtime）+防错显示；**设置面板闪退修复**（effect 一次挂载+回调 ref 化）
+- 概念上限动态化：loadConceptLimit 读路径对齐设置 API（此前写读不一致致设置失效）——phaseL2/焦点注入/schema 描述全随设置（实测 8 全链断言）
+- 面板视觉：已完成组默认折叠+组进度徽标+完成态侧条
+- 测试 62/62；`0.0.1-exp` 为前一实验版（历史保留）
+
+## 0.0.1-exp（2026-09-02）体验实验版
 - 脑暴出题制：ask_user_question 选择题对齐（多轮歧义结清）+必选模式题（用户点选，经 commit_star(mode) 落盘）
 - 时序修复：大小类引导走 next-step（同轮即时，无过期）；锁定回执=完整规格单；审核唯一确认请求；『修改』回滚开口（reject-ack）
 - 小类粒度模式 item.mode（缺省继承会话；scanMode 只认用户=防漂移）

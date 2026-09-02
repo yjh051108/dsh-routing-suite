@@ -1,6 +1,6 @@
 {
   "name": "@dsh-external/dsh-graded-mode",
-  "version": "0.0.1-exp",
+  "version": "0.0.1-rc1",
   "description": "分级模式 v0.0.1-exp（体验实验版）：脑暴出题制（ask_user_question 选择题对齐+必选模式题+多轮歧义结清）→commit_star 北极星定稿→规格化两级计划（spec/accept/do/verify 必填门控+小类粒度 mode）→锁定即呈完整规格单（确认请求唯一）→执行注入按规格定制（三段式+北极星锚定（替代开工前自问）+委派/编排/红队/双轨 skill 卡，委派可情景改写但验收锚=盘档规格）→组收官逐条核对→终验。大小类引导走 next-step（同轮即时，无过期）；模式只认用户改口（防漂移）；6 工具+状态磁盘单轨+审计端点+超级面板。",
   "license": "Apache-2.0",
   "private": false,
