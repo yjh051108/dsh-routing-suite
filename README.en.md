@@ -44,11 +44,12 @@ Copy-Item -Recurse .\preset\router-spec $target
 |---|---|---|---|
 | `injector/` | [dsh-super-injector](https://github.com/yjh051108/dsh-super-injector) | [v0.3.3](https://github.com/yjh051108/dsh-super-injector/releases/tag/v0.3.3) | Runtime injector: dev_* tool family (inject / hot-reload / staging-promote / uninject / route self-heal); git installs build automatically (prepare hook) |
 | `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [v0.3.0 … mainline v1.19.1/v34](https://github.com/yjh051108/dsh-router-standard/releases/tag/v0.3.0) | Reasoning-mode routing presets: router-standard (classified persona + full sections) / router-spec (deep-think-first). router-pro is planned but NOT part of v0.3.0 |
+| `graded/` | [dsh-graded-mode](https://github.com/yjh051108/dsh-routing-suite/tree/main/graded) | [v3.2.0](https://github.com/yjh051108/dsh-routing-suite/releases) | Graded mode: session-level two-level task protocol (brainstorm quiz alignment → North-Star finalization → speced plan → spec-driven injection → check-in → group close-out → final check); 6 tools + 3 modes + per-item mode + redteam gate + audit endpoint; `graded/dsh-graded-mode-3.2.0.tgz` is a direct `dsh plugin --profile web add` target |
 
 > Versions follow each component repo's git tag (links go to the matching Release).
 
-The two components now evolve together with this repository (`injector/` and
-`preset/` are ordinary directories whose contents are committed directly); the
+The three components now evolve together with this repository (`injector/`,
+`preset/` and `graded/` are ordinary directories whose contents are committed directly); the
 standalone upstream repos `dsh-super-injector` / `dsh-router-standard` stay for
 independent releases and may later become mirrors/archives. The preset install
 directory is `preset/router-standard` (flat, no extra nesting).
