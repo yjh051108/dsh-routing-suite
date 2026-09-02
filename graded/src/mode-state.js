@@ -225,7 +225,7 @@ export function onReviewApproved(prev) {
   }
 }
 
-/** 概念上限（动态：全局 graded-settings.json + 会话覆盖 .settings.json——面板设置同一数据源）。 */
+/** 概念上限（动态：全局 graded-settings.json + 会话覆盖 .settings.json——与设置 API 同路径）。 */
 export function loadConceptLimit(sid) {
   try {
     const root = process.env.DSH_HOME || join(homedir(), '.dsh')

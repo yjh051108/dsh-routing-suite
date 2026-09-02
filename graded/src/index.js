@@ -590,10 +590,10 @@ export function apply(ctx, config) {
               const isFirst = idx === 0
               const isLast = (focus.group.items || []).slice(idx + 1).every((it) => it.status === 'completed')
               const text = (isFirst && prevGroupMarked)
-                ? focusL2GroupOpen(focus.group.title, focus.item, s.mode, starPurpose(s))
+                ? focusL2GroupOpen(focus.group.title, focus.item, s.mode, starPurpose(s), loadConceptLimit(sid2), loadVerifyMode(sid2))
                 : isLast
-                  ? focusL2Last(focus.group.title, focus.item, prev, s.mode, starPurpose(s))
-                  : focusL2(focus.group.title, focus.item, prev, s.mode, starPurpose(s))
+                  ? focusL2Last(focus.group.title, focus.item, prev, s.mode, starPurpose(s), loadConceptLimit(sid2), loadVerifyMode(sid2))
+                  : focusL2(focus.group.title, focus.item, prev, s.mode, starPurpose(s), loadConceptLimit(sid2), loadVerifyMode(sid2))
               spliceInjection(decision, userMsg(text))
             }
           }

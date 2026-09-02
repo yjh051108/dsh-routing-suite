@@ -18,7 +18,7 @@ window.__ModuleLoader__.load({
     Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" })
     let react = require("react")
 
-    const { useState, useEffect } = react
+    const { useState, useEffect, useRef } = react
     const e = (type, props, ...children) => react.createElement(type, props, ...children)
 
     /* ---- 样式注入（官方 pattern：style 标签 + data-plugin-css） ---- */
@@ -30,15 +30,16 @@ window.__ModuleLoader__.load({
 .graded-lock{font-size:11px;color:var(--dsw-alias-state-success-primary,#2a9d6e)}
 .graded-editing{font-size:11px;color:var(--dsw-alias-label-tertiary,#999)}
 .graded-l2{display:flex;gap:6px;padding:3px 2px 3px 22px;color:var(--dsw-alias-label-secondary,#555)}
+.graded-l2-done{border-left:2px solid var(--dsw-alias-state-success-primary,#2a9d6e);padding-left:20px;opacity:.62}
 .graded-l2-title{margin-right:2px}
 .graded-chip{font-size:11px;background:var(--dsw-alias-bg-code,#f2f2f2);border-radius:8px;padding:1px 7px;color:var(--dsw-alias-label-secondary,#666)}
 .graded-hint{font-size:11px;color:var(--dsw-alias-label-tertiary,#999);margin-top:2px}
 .graded-summary{font-size:11px;color:var(--dsw-alias-label-tertiary,#999);margin-top:4px}
-.graded-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:2px 10px;border-radius:10px;background:var(--dsw-alias-bg-code,#f2f2f2);color:var(--dsw-alias-label-secondary,#555);cursor:pointer;border:1px solid var(--dsw-alias-border-l2,#e5e5e5);user-select:none}
+.graded-pop button,.graded-pop input,.graded-pop select{pointer-events:auto;cursor:pointer}\n.graded-badge{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:2px 10px;border-radius:10px;background:var(--dsw-alias-bg-code,#f2f2f2);color:var(--dsw-alias-label-secondary,#555);cursor:pointer;border:1px solid var(--dsw-alias-border-l2,#e5e5e5);user-select:none}
 .graded-badge:hover{background:var(--dsw-alias-bg-hover,#e8e8e8)}
 .graded-badge-stage{font-weight:600}
 .graded-badge-off{filter:grayscale(1);opacity:.55}
-.graded-pop{position:absolute;right:8px;top:38px;z-index:900;background:var(--dsw-bg,#fff);border:1px solid var(--dsw-alias-border-l2,#ddd);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.14);padding:10px 12px;min-width:260px;max-height:60vh;overflow:auto}
+.graded-pop{position:fixed;right:14px;top:60px;z-index:99999;background:var(--dsw-bg,#fff);border:1px solid var(--dsw-alias-border-l2,#ddd);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.14);padding:10px 12px;min-width:300px;max-height:80vh;overflow:auto;pointer-events:auto}
 .graded-pop-progress{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
 .graded-pop-progress b{font-size:16px;color:var(--dsw-alias-label-primary,#222)}
 .graded-chip-done{font-size:11px;background:var(--dsw-alias-state-success-primary,#2a9d6e);color:#fff;border-radius:8px;padding:1px 7px}
@@ -54,15 +55,23 @@ window.__ModuleLoader__.load({
 
     /* ---- 纯展示组件（不做解析语义,只渲染工具参数结构） ---- */
 
-    function L2Item({ title, concepts }) {
-      return e("div", { className: "graded-l2" },
-        e("span", { className: "graded-l2-title" }, title),
+    function L2Item({ title, concepts, status, locked }) {
+      const done = status === "completed"
+      return e("div", { className: "graded-l2" + (done ? " graded-l2-done" : ""), style: done ? { opacity: ".62" } : undefined },
+        e("span", { className: "graded-l2-title" }, (done ? "✅ " : locked ? "• " : "") + title),
         (concepts || []).map((c, i) => e("span", { className: "graded-chip", key: i }, c)),
       )
     }
 
     function Tree({ groups, editing }) {
-      const [closed, setClosed] = useState({})
+      // 视觉/密度优化：已完成组默认折叠（层级聚焦当前推进组——历史完成组收进一行）
+      const [closed, setClosed] = useState(() => {
+        const init = {}
+        for (const g of groups || []) {
+          if (g.locked && (g.items || []).every((it) => it.status === "completed")) init[g.title] = true
+        }
+        return init
+      })
       return e("div", { className: "graded-tree" },
         (groups || []).map((g) => {
           const isClosed = !!closed[g.title]
@@ -73,10 +82,11 @@ window.__ModuleLoader__.load({
             },
               e("span", null, isClosed ? "▸" : "▼"),
               e("span", { className: "graded-l1-title" }, g.title),
-              e("span", { className: "graded-lock" }, g.locked ? "🔒 已锁定" : ""),
+              e("span", { style: { marginLeft: "4px", fontSize: "10px", color: "#999" } }, String((g.items || []).filter((it) => it.status === "completed").length) + "/" + String((g.items || []).length)),
+              e("span", { className: "graded-lock" }, g.locked ? "🔒" : ""),
             ),
             !isClosed && e("div", null,
-              (g.items || []).map((it, i) => e(L2Item, { key: i, title: it.title, concepts: it.concepts })),
+              (g.items || []).map((it, i) => e(L2Item, { key: i, title: it.title, concepts: it.concepts, status: it.status, locked: g.locked })),
               (g.items || []).length === 0 && e("div", { className: "graded-hint" }, "（大类已锁定,小类待分化）"),
             ),
           )
@@ -191,6 +201,54 @@ window.__ModuleLoader__.load({
       }
     }
 
+    /* ---- 原生 DOM 设置面板（绕过 React 合成事件被宿主层级拦截的问题——事件 100% 原生） ---- */
+    function NativePanel({ sid, state, onState, onClose, onSwitch }) {
+      // 修复闪退：effect 只挂载一次（回调 ref 化）——2s 轮询导致的父重渲染不再重建面板（否则原生 select 下拉被撕掉）
+      const cbRef = useRef({ onState, onClose, onSwitch })
+      cbRef.current = { onState, onClose, onSwitch }
+      useEffect(() => {
+        const root = document.createElement("div")
+        root.style.cssText = "position:fixed;right:14px;top:64px;z-index:99999;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.16);padding:12px;min-width:320px;font:13px/1.6 system-ui,sans-serif;color:#222"
+        root.setAttribute("data-graded-native", "1")
+        const [sessions, settings] = state
+        const sess = (sessions || []).map((x) => `<option value="${x.sid}">${x.sid.replace(/^session-/, "").slice(0, 8)} · ${x.stage} · ${(x.task || "").slice(0, 18)}</option>`).join("")
+        root.innerHTML =
+          `<div style="font-weight:700;margin-bottom:8px">⚙ 设置</div>` +
+          `<div style="display:flex;align-items:center;gap:8px;margin:8px 0"><span style="width:64px">会话</span>` +
+          `<select data-n="sid" style="font-size:13px;flex:1">${sess}</select></div>` +
+          `<div style="display:flex;align-items:center;gap:8px;margin:8px 0"><span style="width:64px">作用域</span>` +
+          `<label style="display:inline-flex;gap:4px;margin-right:10px;cursor:pointer"><input type="radio" name="gscope" value="global" ${settings.scope === "global" ? "checked" : ""}>全局</label>` +
+          `<label style="display:inline-flex;gap:4px;cursor:pointer"><input type="radio" name="gscope" value="session" ${settings.scope === "session" ? "checked" : ""}>本会话</label></div>` +
+          `<div style="display:flex;align-items:center;gap:8px;margin:8px 0"><span style="width:64px">概念上限</span>` +
+          `<input type="range" data-n="limit" min="3" max="8" value="${settings.limit}" style="flex:1"><b data-n="limitv" style="min-width:14px">${settings.limit}</b></div>` +
+          `<div style="display:flex;align-items:center;gap:8px;margin:8px 0"><span style="width:64px">检测模式</span>` +
+          `<select data-n="vm" style="font-size:13px;flex:1">` +
+          `<option value="auto" ${settings.vm === "auto" ? "selected" : ""}>自决策（默认，成本最低）</option>` +
+          `<option value="self-redteam" ${settings.vm === "self-redteam" ? "selected" : ""}>单自红队（每小类裁决）</option>` +
+          `<option value="subagent" ${settings.vm === "subagent" ? "selected" : ""}>单 subagent（每小类委派）</option></select></div>` +
+          `<div style="margin-top:6px"><button data-n="save" style="font-size:13px;padding:4px 14px;cursor:pointer">保存</button>` +
+          `<button data-n="close" style="font-size:13px;padding:4px 14px;cursor:pointer;margin-left:8px">关闭</button></div>` +
+          `<div data-n="msg" style="font-size:12px;color:#2a9d6e;margin-top:6px"></div>`
+        document.body.appendChild(root)
+        const q = (n) => root.querySelector(`[data-n="${n}"]`)
+        q("sid").value = sid || ""
+        const apply = (patch) => cbRef.current.onState({ ...settings, ...patch })
+        q("sid").addEventListener("change", (ev) => { const v = ev.target.value; if (v && cbRef.current.onSwitch) cbRef.current.onSwitch(v) })
+        root.querySelectorAll('input[name="gscope"]').forEach((el) => el.addEventListener("change", (ev) => { if (ev.target.checked) apply({ scope: ev.target.value }) }))
+        q("limit").addEventListener("input", (ev) => { apply({ limit: Number(ev.target.value) }); q("limitv").textContent = ev.target.value })
+        q("vm").addEventListener("change", (ev) => apply({ vm: ev.target.value }))
+        q("save").addEventListener("click", () => {
+          const scope = root.querySelector('input[name="gscope"]:checked').value
+          const qs = "?scope=" + scope + (scope === "session" && sid ? "&sid=" + encodeURIComponent(sid) : "")
+          fetch("/graded-mode/api/settings" + qs, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ conceptLimit: settings.limit, verifyMode: settings.vm }) })
+            .then((r) => r.json()).then((j) => { q("msg").textContent = j && j.ok ? "✓ 已保存（下次会话生效）" : (j?.error || "保存失败") }).catch((e) => { q("msg").textContent = String(e) })
+        })
+        q("close").addEventListener("click", () => cbRef.current.onClose())
+        return () => { root.remove() }
+      }, []) // 只挂载一次：轮询/状态刷新不再重建面板
+      return null
+    }
+
     function SettingPanel({ sid, onClose, onSwitch }) {
       const [st, setSt] = useState(null)
       const [scope, setScope] = useState("global")
@@ -242,6 +300,13 @@ window.__ModuleLoader__.load({
       const [st, setSt] = useState(null)
       const [open, setOpen] = useState(false)
       const [settings, setSettings] = useState(false)
+      const [settingsData, setSettingsData] = useState({ values: { scope: "global", limit: 3, vm: "auto" }, sessions: [] })
+      useEffect(() => {
+        let alive = true
+        fetch("/graded-mode/api/settings").then((r) => r.json()).then((j) => { if (alive && j && j.conceptLimit !== undefined) setSettingsData((d) => ({ ...d, values: { scope: "global", limit: j.conceptLimit, vm: j.verifyMode } })) }).catch(() => {})
+        fetch("/graded-mode/api/sessions").then((r) => r.json()).then((j) => { if (alive && j && j.ok) setSettingsData((d) => ({ ...d, sessions: j.sessions })) }).catch(() => {})
+        return () => { alive = false }
+      }, [])
       // 会话锁定：首次成功显示后 localStorage 记忆（多会话并发时徽章不再随“最近活跃”漂移）；
       // 面板“会话”下拉切换=显式更新锁定
       const lockKey = "graded.lock.sid"
@@ -306,7 +371,7 @@ window.__ModuleLoader__.load({
           e("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "6px" } },
             e("span", { className: "graded-hint" }, "点击徽章收起 · 数据来自 /graded-mode/api/state"),
             e("button", { onClick: () => setSettings((s) => !s), style: { fontSize: "12px", padding: "2px 8px" } }, "⚙ 设置")),
-          settings && e(Boundary, null, e(Safe(SettingPanel), { sid: (st && st.sid) ? st.sid : null, onClose: () => setSettings(false), onSwitch: (nsid) => { try { localStorage.setItem(lockKey, nsid) } catch { /* */ } setSt(null); fetch("/graded-mode/api/state?sid=" + encodeURIComponent(nsid)).then((r) => r.json()).then((j) => { if (j && j.ok) setSt(j) }).catch(() => {}) } })),
+          settings && e(Boundary, null, e(NativePanel, { sid: (st && st.sid) ? st.sid : null, state: [settingsData.sessions, { scope: "global", limit: 3, vm: "auto", ...settingsData.values }], onState: (s) => setSettingsData((d) => ({ ...d, values: s })), onClose: () => setSettings(false), onSwitch: (nsid) => { try { localStorage.setItem(lockKey, nsid) } catch { /* */ } setSt(null); fetch("/graded-mode/api/state?sid=" + encodeURIComponent(nsid)).then((r) => r.json()).then((j) => { if (j && j.ok) setSt(j) }).catch(() => {}) } })),
         ),
       )
     }

@@ -390,10 +390,10 @@ function nextGuideText(state) {
         if (focus.group.items[i].status === 'completed') { prev = focus.group.items[i].title; break }
       }
       const text = isFirst && prevMarked
-        ? focusL2GroupOpen(focus.group.title, focus.item, mode, state.star?.purpose)
+        ? focusL2GroupOpen(focus.group.title, focus.item, mode, state.star?.purpose, state ? loadConceptLimit(state.sid || null) : 3, state ? loadVerifyMode(state.sid || null) : 'auto')
         : isLast
-          ? focusL2Last(focus.group.title, focus.item, prev, mode, state.star?.purpose)
-          : focusL2(focus.group.title, focus.item, prev, mode, state.star?.purpose)
+          ? focusL2Last(focus.group.title, focus.item, prev, mode, state.star?.purpose, state ? loadConceptLimit(state.sid || null) : 3, state ? loadVerifyMode(state.sid || null) : 'auto')
+          : focusL2(focus.group.title, focus.item, prev, mode, state.star?.purpose, state ? loadConceptLimit(state.sid || null) : 3, state ? loadVerifyMode(state.sid || null) : 'auto')
       return { key: 'focus:' + focus.group.title + ':' + focus.item.title + ':' + focus.item.status, text }
     }
   }
