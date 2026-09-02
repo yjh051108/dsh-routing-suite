@@ -29,7 +29,7 @@
 
 import {
   applyPersona, bandFor, bandOf, coreFor, parseMode, personaFor, sessionMode, testinessFor, clamp01,
-  classifyTask, extractText, isComplexTask,
+  classifyTask, extractText, isComplexTask, sessionEvents
 } from './router-core-v10.mjs'
 
 /** Cordis plugin name used by loader diagnostics. */
@@ -142,7 +142,7 @@ export function apply(ctx, config) {
       core = new Set(legacyCore(mode))
     }
 
-    if (session.events.some((event) => event.type === 'tool/call')) {
+    if (sessionEvents(session).some((event) => event.type === 'tool/call')) {
       // Promoted (#44): the RL-standard first-turn trim was a FIRST-REQUEST-ONLY
       // minimization. After the first durable tool/call the router stops
       // touching anything — standard mode restores the full sections/contexts;
@@ -223,7 +223,7 @@ export function apply(ctx, config) {
       const id = `router-guide-${message.id}`
       // Resume safety: a previously appended guide for the same message id
       // is already durable in the transcript — never inject twice.
-      if (session.events.some((event) => event.type === 'user/message' && event.data?.id === id)) continue
+      if (sessionEvents(session).some((event) => event.type === 'user/message' && event.data?.id === id)) continue
       guides.push({
         id,
         role: 'user',
