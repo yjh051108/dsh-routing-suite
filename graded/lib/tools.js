@@ -49,7 +49,7 @@ const groupItemSchema = {
   type: 'object', additionalProperties: false, required: ['title', 'spec', 'accept', 'do', 'verify'],
   properties: {
     title: { type: 'string', description: '小类名（纯名词短语,不要重复大类词）' },
-    concepts: { type: 'array', items: { type: 'string' }, description: '核心概念（≤3 个,超限仅提示）' },
+    concepts: { type: 'array', items: { type: 'string' }, description: `核心概念（≤${loadConceptLimit(null)} 个——面板设置实时值；超限仅提示非错误）` },
     spec: { type: 'string', description: '小类任务说明（多行；可提及参考文档/文件，注入时自然引用）' },
     accept: { type: 'array', items: { type: 'string' }, description: '验收标准（按模式文法：correct=可测量断言/experience=感受断言+可复现动作/research=可复核断言;探索型须带退路占位）' },
     mode: { type: 'string', enum: ['correct', 'experience', 'research'], description: '本小类验收模式（可缺省=继承会话模式——全栈任务可按小类粒度换重心）' },
@@ -68,14 +68,15 @@ const groupSchema = {
   },
 }
 
-/** 软约束提示采集（概念 ≤3 为提示级约束，不阻断）。 */
-function collectWarnings(level, args) {
+/** 软约束提示采集（概念上限为提示级约束，不阻断；上限=loadConceptLimit 面板设置）。 */
+function collectWarnings(level, args, sid) {
   const out = []
   if (level === 'L2') {
+    const limit = (() => { try { return loadConceptLimit(sid) } catch { return 3 } })()
     for (const g of (args?.groups || [])) {
       for (const it of (g?.items || [])) {
         const n = (it?.concepts || []).length
-        if (n > 3) out.push(`「${g?.title || ''}/${it?.title || ''}」概念超限 ${n} > 3（仅提示，不阻断）`)
+        if (n > limit) out.push(`「${g?.title || ''}/${it?.title || ''}」概念超限 ${n} > ${limit}（仅提示，不阻断）`)
       }
     }
   }
@@ -218,7 +219,7 @@ export function reviseDoDefinition() {
 /** edit_plan：按 level 编辑树。已锁层 → 拒绝；级别与阶段不符 → 拒绝。 */export function editPlanDefinition(deps) {
   return {
     name: 'edit_plan',
-    description: '【分级·编辑】按层级编辑计划树：level=L1 大类（title/spec/accept 必填；accept=组级完成条件 ≤3 条），level=L2 完整树（每小类 title/spec/accept/do/verify 必填——spec=任务说明、accept=验收标准（按模式文法）、do=开发形态、verify=验证形态；concepts ≤3）。每次传全量（整体替换）。顺序：大类 → lock_stage(L1) → 小类 → lock_stage(L2)。',
+    description: `【分级·编辑】按层级编辑计划树：level=L1 大类（title/spec/accept 必填；accept=组级完成条件 ≤3 条），level=L2 完整树（每小类 title/spec/accept/do/verify 必填——spec=任务说明、accept=验收标准（按模式文法）、do=开发形态、verify=验证形态；concepts ≤${loadConceptLimit(null)} 个——面板设置实时值）。每次传全量（整体替换）。顺序：大类 → lock_stage(L1) → 小类 → lock_stage(L2)。`,
     parameters: {
       type: 'object', additionalProperties: false, required: ['level'],
       properties: {
@@ -265,7 +266,7 @@ export function reviseDoDefinition() {
         throw new Error(`edit_plan: level 必须是 "L1" 或 "L2"，得到 ${JSON.stringify(level)}`)
       }
       const cur = loadState(sid) || s
-      const warnings = collectWarnings(level, args)
+      const warnings = collectWarnings(level, args, sid)
       return { ok: true, text: `已编辑 ${level} 计划（${treeCount(cur)}）：\n${treeText(cur.plan)}`, ...(warnings.length ? { warnings } : {}) }
     },
     presentCall: (args) => ({ card: 'generic', title: `计划编辑 (edit_plan ${args?.level || ''})`, kind: 'other', rawInput: args }),
