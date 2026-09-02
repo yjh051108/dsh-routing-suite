@@ -1,7 +1,7 @@
 # dsh-graded-mode v0.0.1-exp 版本说明（体验实验版，原 3.2.0）
 
 - 基线：v3.1.0（备份 <backup-dir>\\dsh-graded-mode-v3.1.0）
-- 测试：61/61（mode-state / tools / inject-text）
+- 测试：62/62（mode-state / tools / inject-text）
 - 反馈驱动：基于 7abc5cad 真实会话分析（效果未达预期的三因）与本会话多轮实测修复
 
 ## 变更总览（semver minor：新功能+行为增强）

@@ -7,6 +7,14 @@ speced plan → check-in → group close-out → final check, with redteam gate 
 
 [中文](README.md) | English
 
+## Research & Data (graded)
+
+**"Models slack off too — we measured it, and built defenses."** — public research slot for the graded plugin:
+- [🔬 Model Attention Slack: Observation Notes](graded/docs/STUDY.md) — real segment-level data of verification-effort decay in long tasks (no-protocol chain: late-stage "1 tool / 0 image checks" vs protocol chain fully on-line) + defense mapping
+- [📊 Protocol vs No-Protocol: Measured Comparison](graded/docs/COMPARE.md) — 3-session comparison table + ASCII charts (same-type 3D tasks)
+- [🧪 Measurement tool](graded/scripts/measure.mjs) — `node scripts/measure.mjs your-session.jsonl`: recompute the same metrics on your own sessions (sanitized: numbers only)
+- [📁 Raw data](graded/docs/DATA.md) — sanitized per-session metric tables + decay profile + audit metrics
+
 ## Component entry points
 
 | Component | Description | Entry |

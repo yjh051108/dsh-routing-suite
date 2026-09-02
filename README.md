@@ -14,6 +14,14 @@
 | **preset** | 思维模式路由预设（router-standard / router-spec，按模型 persona 路由） | [preset/README.md](preset/README.md) · [实验报告](preset/docs/experiments.md) |
 | **graded** | 分级模式：会话级两级任务协议（6 工具+三模式+小类模式粒度+红队门+审计端点+超级面板） | [graded/README.md](graded/README.md) · [架构](graded/docs/ARCHITECTURE.md) · [理论](graded/docs/THEORY.md) · [实测数据](graded/docs/DATA.md) |
 
+## 研究与数据（graded）
+
+**"模型也会偷懒——我们测到了，还做了对抗"** —— 分级模式插件的公开研究位：
+- [🔬 模型注意力懈怠：观测笔记](graded/docs/STUDY.md)——长程任务里验证勤勉度衰减的真实分段数据（无协议链晚段"1 工具/0 读图" vs 协议链全程在线）+对抗机制对照
+- [📊 协议 vs 无协议：实测对比](graded/docs/COMPARE.md)——同型 3D 任务三会话对比表+ASCI I 图
+- [🧪 测量工具](graded/scripts/measure.mjs)——`node scripts/measure.mjs 你的会话.jsonl`：任何人可对自己会话复算上述指标（脱敏：只输出数字）
+- [📁 实测数据](graded/docs/DATA.md)——三会话脱敏指标表+懈怠强度表+审计口径
+
 ## 一键安装
 
 ```powershell
