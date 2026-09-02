@@ -227,26 +227,27 @@ window.__ModuleLoader__.load({
       const [st, setSt] = useState(null)
       const [open, setOpen] = useState(false)
       const [settings, setSettings] = useState(false)
-      const badSid = null
-      const getSid = () => {
-        const raw = typeof location !== "undefined" ? location.href : ""
-        const hit = raw.match(/(session-)?[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/) ||
-          (typeof history !== "undefined" && history.state && JSON.stringify(history.state).match(/(session-)?[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/)) ||
-          null
-        return hit ? (hit[0].startsWith("session-") ? hit[0] : "session-" + hit[0]) : null
-      }
-      const sid = st && st.sid ? st.sid : getSid()
-      const urlSid = sid
+      // 会话锁定：首次成功显示后 localStorage 记忆（多会话并发时徽章不再随“最近活跃”漂移）；
+      // 面板“会话”下拉切换=显式更新锁定
+      const lockKey = "graded.lock.sid"
+      const getLocked = () => { try { return localStorage.getItem(lockKey) } catch { return null } }
+      const sk = getLocked()
       useEffect(() => {
         let alive = true
+        const qs = sk ? "?sid=" + encodeURIComponent(sk) : ""
         const tick = () => {
-          const qs = urlSid ? "?sid=" + encodeURIComponent(urlSid) : ""
-          fetch("/graded-mode/api/state" + qs).then((r) => r.json()).then((j) => { if (alive) setSt(j) }).catch(() => {})
+          fetch("/graded-mode/api/state" + qs).then((r) => r.json()).then((j) => {
+            if (!alive) return
+            if (j && j.ok && j.stage !== "off") {
+              if (!sk) { try { localStorage.setItem(lockKey, j.sid) } catch { /* */ } }
+              setSt(j)
+            } else if (j && j.ok) { setSt(j) }
+          }).catch(() => {})
         }
         tick()
-        const id = setInterval(tick, 2000) // 2s：切换可见性更快（原 4s）
+        const id = setInterval(tick, 2000)
         return () => { alive = false; clearInterval(id) }
-      }, [urlSid])
+      }, [sk])
       if (!st || !st.ok) return null
       if (st.stage === "off") return null
       const stageLabel = STAGE_LABEL[st.stage] || st.stage
@@ -285,7 +286,7 @@ window.__ModuleLoader__.load({
           e("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "6px" } },
             e("span", { className: "graded-hint" }, "点击徽章收起 · 数据来自 /graded-mode/api/state"),
             e("button", { onClick: () => setSettings((s) => !s), style: { fontSize: "12px", padding: "2px 8px" } }, "⚙ 设置")),
-          settings && e(Safe(SettingPanel), { sid: (st.sid || urlSid) ? (st.sid || urlSid) : null, onClose: () => setSettings(false), onSwitch: (nsid) => { setSt(null); if (nsid) { const qs = "?sid=" + encodeURIComponent(nsid); fetch("/graded-mode/api/state" + qs).then((r) => r.json()).then((j) => { if (j && j.ok) setSt(j) }).catch(() => {}) } } }),
+          settings && e(Safe(SettingPanel), { sid: (st && st.sid) ? st.sid : null, onClose: () => setSettings(false), onSwitch: (nsid) => { try { localStorage.setItem(lockKey, nsid) } catch { /* */ } setSt(null); fetch("/graded-mode/api/state?sid=" + encodeURIComponent(nsid)).then((r) => r.json()).then((j) => { if (j && j.ok) setSt(j) }).catch(() => {}) } }),
         ),
       )
     }
