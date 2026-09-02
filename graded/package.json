@@ -28,7 +28,9 @@
   "engines": {
     "dsh": ">=0.0.1-rc"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.2"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
@@ -41,6 +43,6 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test tests/mode-state.test.mjs tests/tools.test.mjs"
+    "test": "node --test tests/mode-state.test.mjs tests/tools.test.mjs tests/inject-text.test.mjs"
   }
 }

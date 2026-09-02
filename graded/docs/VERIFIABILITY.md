@@ -9,7 +9,7 @@
 |---|---|---|---|---|
 | R1 | 6 工具清单与实测一致 | README「工具（6）」 | 6 行工具表 | `gh api repos/yjh051108/dsh-routing-suite/git/trees/main?recursive=1`（graded/src/tools.js 内 6 个 `export function*Definition`） |
 | R2 | 全链 7 步 | README「全链」 | 7 行流程 | 走一遍：`/graded` 触发 → commit_star → edit_plan(L1/L2) → lock ×2 → mark_task（见 docs/DATA.md f0855822 链） |
-| R3 | 测试 62 项 | README「开发与测试」 | 62/62 | `cd graded && npm test`（三条测试文件联合运行） |
+| R3 | 测试 62 项 | README「开发与测试」 | 62/62（`npm install` 后） | `cd graded && npm install && npm test`（dependencies 声明 schemastery ^3.18.2；三测试文件全量） |
 | R4 | 装配命令占位符 | README「装配」 | `<NPM_GLOBAL>/<DSH_HOME>/<PLUGIN_DIR>` | 换真实路径执行 `dsh plugin --profile web add <PLUGIN_DIR>` |
 
 ## ARCHITECTURE.md（4 断言）
