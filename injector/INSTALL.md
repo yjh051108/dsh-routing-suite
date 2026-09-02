@@ -59,7 +59,25 @@ dsh plugin --profile web add ~/dsh-super-injector
 dsh plugin --profile web add github:yjh051108/dsh-super-injector
 ```
 
-重启 web 后同上验证。（git 安装只取源码，需要本机有构建环境：bash + node + npm + DSH checkout 或 `DSH_CHECKOUT` 环境变量。）
+重启 web 后同上验证。（git 安装只取源码，构建由已提交的 `prepare` 脚本自动完成——
+`npm`/`pnpm` 抓取后即运行，产出自包含的 `lib/`，无需 DSH checkout。）
+
+自己从源码构建（例如改过 `src/` 之后）：
+
+```bash
+# 1. 安装依赖。peerDependencies 由 DSH 宿主提供，npm 却会自动装 peer 并撞上
+#    未发布的 @deepseek-ai/dsh-type-meta（E404）——用 --legacy-peer-deps 跳过。
+npm install --legacy-peer-deps --no-audit --no-fund
+
+# 2. 类型检查 + 声明产出。cordis/schemastery 必须解析到 @deepseek-ai 的分叉版
+#    （4.0.1 / 3.18.1）：公共 registry 的 cordis d.ts 在 NodeNext 下是坏的，
+#    而打包后的 app bundle 又把分叉版 d.ts 剥掉了。把分叉包复制进
+#    node_modules/@deepseek-ai/ 并链接（之后任何 npm install 都会再次剪掉，需重链）。
+./node_modules/.bin/tsc -p tsconfig.json
+
+# 3. 打包 host + client（lib/ 已存在时 prepare.mjs 会跳过——先 rm -rf lib 强制重建）
+./node_modules/.bin/tsdown --config tsdown.config.ts
+```
 
 ---
 
