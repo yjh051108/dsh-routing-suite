@@ -34,15 +34,19 @@ function defaultDshHome() {
   return join(homedir(), '.dsh')
 }
 
-/** 盘档 mtime 最新的会话（重启后零等待恢复——不依赖内存 activeSid；最多扫 200 文件）。 */
-function latestStateSid() {
+/** 盘档 mtime 最新的会话（重启后零等待恢复——不依赖内存 activeSid；最多扫 200 文件；skipOff=过滤未激活会话）。
+ *  修复：徽章消失根因=回退命中 off 会话（client 锁定 off→隐藏）——现在取"最近非 off"会话。 */
+function latestStateSid(skipOff = true) {
   try {
     const dir = join(process.env.DSH_HOME || defaultDshHome(), 'graded-state')
     const files = readdirSync(dir).filter((f) => f.endsWith('.json')).slice(0, 200)
     let best = null, bestM = -1
     for (const f of files) {
-      const m = statSync(join(dir, f)).mtimeMs
-      if (m > bestM) { bestM = m; best = f.replace(/\.json$/, '') }
+      const p = join(dir, f)
+      const m = statSync(p).mtimeMs
+      if (m <= bestM) continue
+      if (skipOff && (loadState(f.replace(/\.json$/, '')) || initMode()).stage === 'off') continue
+      bestM = m; best = f.replace(/\.json$/, '')
     }
     return best
   } catch { return null }

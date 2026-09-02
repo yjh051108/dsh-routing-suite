@@ -178,6 +178,19 @@ window.__ModuleLoader__.load({
       )
     }
 
+    /* ---- 真正的 React 错误边界（渲染+生命周期捕获——Safe 的 try/catch 只兜渲染层） ---- */
+    class Boundary extends react.Component {
+      constructor(props) { super(props); this.state = { err: null } }
+      static getDerivedStateFromError(err) { return { err } }
+      componentDidCatch(err) { /* 只降级设置块，不抛到上层树 */ }
+      render() {
+        if (this.state.err) {
+          return e("div", { className: "graded-hint", title: String(this.state.err) }, "（设置面板降级：" + String(this.state.err).slice(0, 60) + "）")
+        }
+        return this.props.children
+      }
+    }
+
     function SettingPanel({ sid, onClose, onSwitch }) {
       const [st, setSt] = useState(null)
       const [scope, setScope] = useState("global")
@@ -211,8 +224,10 @@ window.__ModuleLoader__.load({
             (sessions || []).map((x) => e("option", { key: x.sid, value: x.sid }, x.sid.replace(/^session-/, "").slice(0, 8) + " · " + x.stage + (x.task ? " · " + x.task : ""))))),
         row("作用域", e("div", { style: { display: "flex", gap: "10px", fontSize: "12px" } },
           ["global", "session"].map((s) =>
-            e("label", { key: s }, e("input", { type: "radio", checked: scope === s, onChange: () => setScope(s) }), s === "global" ? "全局" : "本会话")))),
-        row("概念上限", e("input", { type: "range", min: 3, max: 8, value: limit, onChange: (ev) => setLimit(Number(ev.target.value)) }, "  " + limit)),
+            e("label", { key: s, style: { display: "inline-flex", alignItems: "center", gap: "2px" } }, e("input", { type: "radio", checked: scope === s, onChange: () => setScope(s) }), s === "global" ? "全局" : "本会话")))),
+        row("概念上限", e("div", { style: { display: "inline-flex", alignItems: "center", gap: "6px" } },
+          e("input", { type: "range", min: 3, max: 8, value: limit, onChange: (ev) => setLimit(Number(ev.target.value)) }),
+          e("span", { style: { fontSize: "12px" } }, String(limit)))),
         row("检测模式", e("select", { value: vm, onChange: (ev) => setVm(ev.target.value), style: { fontSize: "12px" } },
           e("option", { value: "auto" }, "自决策（默认，成本最低）"),
           e("option", { value: "self-redteam" }, "单自红队（每小类裁决）"),
@@ -242,7 +257,12 @@ window.__ModuleLoader__.load({
               if (!sk) { try { localStorage.setItem(lockKey, j.sid) } catch { /* */ } }
               setSt(j)
             } else if (j && j.ok) { setSt(j) }
-          }).catch(() => {})
+            else if (sk) {
+              // 锁定的会话已失效（off/无盘档）→ 清锁回退（防死锁）
+              try { localStorage.removeItem(lockKey) } catch { /* */ }
+              setSt(null)
+            }
+          }).catch((e) => { if (sk) { try { localStorage.removeItem(lockKey) } catch { /* */ } setSt(null) } })
         }
         tick()
         const id = setInterval(tick, 2000)
@@ -265,7 +285,7 @@ window.__ModuleLoader__.load({
           st.current && e("span", { style: { fontSize: "11px", maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, "▸" + st.current),
           e("span", null, st.done + "/" + st.total + " ✓" + pct + "%"),
           rtTag,
-          st.sidShort && e("span", { style: { fontSize: "10px", opacity: ".65", marginLeft: "2px" } }, "·" + st.sidShort),
+          st.sidShort && e("span", { style: { fontSize: "10px", fontWeight: "700", opacity: ".85", marginLeft: "2px" } }, "·" + st.sidShort),
         ),
         open && e("div", { className: "graded-pop" },
           e("div", { className: "graded-pop-progress" },
@@ -286,7 +306,7 @@ window.__ModuleLoader__.load({
           e("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "6px" } },
             e("span", { className: "graded-hint" }, "点击徽章收起 · 数据来自 /graded-mode/api/state"),
             e("button", { onClick: () => setSettings((s) => !s), style: { fontSize: "12px", padding: "2px 8px" } }, "⚙ 设置")),
-          settings && e(Safe(SettingPanel), { sid: (st && st.sid) ? st.sid : null, onClose: () => setSettings(false), onSwitch: (nsid) => { try { localStorage.setItem(lockKey, nsid) } catch { /* */ } setSt(null); fetch("/graded-mode/api/state?sid=" + encodeURIComponent(nsid)).then((r) => r.json()).then((j) => { if (j && j.ok) setSt(j) }).catch(() => {}) } }),
+          settings && e(Boundary, null, e(Safe(SettingPanel), { sid: (st && st.sid) ? st.sid : null, onClose: () => setSettings(false), onSwitch: (nsid) => { try { localStorage.setItem(lockKey, nsid) } catch { /* */ } setSt(null); fetch("/graded-mode/api/state?sid=" + encodeURIComponent(nsid)).then((r) => r.json()).then((j) => { if (j && j.ok) setSt(j) }).catch(() => {}) } })),
         ),
       )
     }
