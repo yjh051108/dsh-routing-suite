@@ -1,7 +1,0 @@
-{
-  "contributes": {
-    "commands": [
-      "分级"
-    ]
-  }
-}

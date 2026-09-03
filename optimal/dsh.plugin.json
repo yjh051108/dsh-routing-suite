@@ -1,0 +1,8 @@
+{
+  "contributes": {
+    "commands": [
+      "optimal",
+      "分级"
+    ]
+  }
+}

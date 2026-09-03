@@ -1,6 +1,0 @@
-# dsh-graded-mode bundle 层：插入插件行。
-# 会话级两级任务协议插件：/分级 on 激活；不激活 = 官方零痕迹。
-- insert:
-    - id: dsh-graded-mode
-      name: '@dsh-external/dsh-graded-mode'
-      config: {}

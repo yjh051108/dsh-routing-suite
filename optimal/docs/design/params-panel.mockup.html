@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dsh-optimal-mode · 设置页参数页设计稿</title>
+<style>
+  :root {
+    --bg: var(--theme-bg, #0d1117); --panel: var(--theme-panel, #161b22); --panel-2: var(--theme-panel-2, #1c2128);
+    --border: var(--theme-border, #30363d); --text: var(--theme-text, #e6edf3); --dim: var(--theme-text-dim, #8b949e);
+    --accent: var(--theme-accent, #58a6ff); --ok: var(--theme-ok, #3fb950); --warn: var(--theme-warn, #d29922); --bad: #f85149;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font: 13px/1.55 -apple-system,"Segoe UI",system-ui,sans-serif; }
+  .topbar { height: 44px; background: var(--panel); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; gap: 10px; }
+  .topbar .brand { font-weight: 600; } .topbar .crumb { color: var(--dim); font-size: 12px; }
+  .layout { display: flex; min-height: calc(100vh - 44px); }
+  /* 设置页左栏 */
+  .side { width: 190px; border-right: 1px solid var(--border); padding: 14px 8px; flex: none; }
+  .side .s-item { padding: 7px 12px; border-radius: 8px; color: var(--dim); margin-bottom: 2px; cursor: pointer; }
+  .side .s-item.on { background: var(--panel-2); color: var(--text); font-weight: 600; border-left: 2px solid var(--accent); }
+  .side .s-item.new { color: var(--accent); }
+  main { flex: 1; padding: 22px 26px; max-width: 760px; }
+  h2 { font-size: 17px; margin-bottom: 4px; } .sub { color: var(--dim); font-size: 12px; margin-bottom: 14px; }
+  /* 模型 chips */
+  .models { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  .chip { padding: 5px 12px; border: 1px solid var(--border); border-radius: 16px; background: var(--panel); color: var(--dim); cursor: pointer; font-size: 12.5px; }
+  .chip.on { border-color: var(--accent); color: var(--accent); background: rgba(88,166,255,.1); font-weight: 600; }
+  .chip .cur { font-size: 9.5px; color: var(--ok); margin-left: 5px; }
+  .chip.add { border-style: dashed; }
+  /* 参数卡 */
+  .card { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); padding: 14px 16px; margin-bottom: 12px; }
+  .card h3 { font-size: 13.5px; display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .card h3 .tag { font-size: 10px; color: var(--dim); border: 1px solid var(--border); border-radius: 7px; padding: 0 6px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  .row label { width: 175px; color: var(--dim); font-size: 12.5px; flex: none; }
+  .row .hint { font-size: 11px; color: var(--dim); }
+  input[type=number] { width: 74px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 7px; color: var(--text); padding: 4px 8px; font-size: 13px; }
+  input.err { border-color: var(--bad); box-shadow: 0 0 0 2px rgba(248,81,73,.15); }
+  select, textarea { background: var(--panel-2); border: 1px solid var(--border); border-radius: 7px; color: var(--text); padding: 4px 8px; font-size: 12.5px; }
+  textarea { width: 100%; min-height: 40px; resize: vertical; font-family: inherit; }
+  .errmsg { display: none; color: var(--bad); font-size: 11px; margin-left: 8px; }
+  .errmsg.on { display: inline; }
+  /* 高级区折叠 */
+  .adv-head { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .adv-body { display: none; margin-top: 10px; }
+  .card.adv.open .adv-body { display: block; }
+  .adv-sum { color: var(--dim); font-size: 11px; margin-left: auto; }
+  /* toast */
+  #toast { position: fixed; right: 16px; bottom: 16px; background: var(--panel-2); border: 1px solid var(--ok); color: var(--text);
+    padding: 8px 14px; border-radius: 10px; font-size: 12.5px; opacity: 0; transform: translateY(8px); transition: .18s; pointer-events: none; max-width: 420px; }
+  #toast.on { opacity: 1; transform: none; }
+</style>
+</head>
+<!-- 历史文档（grade/v0.2 时代谱系）：现行以 THEORY-v0.3 为准 -->
+<body>
+<!-- ✅ v0.2 定稿：三选一“默认模式”位已删→代价档位说明；模型层参数存储接线=参数块（遗留在册） -->
+  <div class="topbar"><span class="brand">DeepSeek Harness</span><span class="crumb">/ 设置（设计稿：数据为 mock 形状，交互真实）</span></div>
+  <div class="layout">
+    <nav class="side" id="side"></nav>
+    <main>
+      <h2>最优律参数</h2>
+      <p class="sub">按模型适配——编辑对象=所选模型；无配置回退内置默认。变更即 PUT model-params（设计稿模拟）。</p>
+      <div class="models" id="models"></div>
+      <div id="cards"></div>
+    </main>
+  </div>
+  <div id="toast"></div>
+
+<script>
+/* ============ mock：三模型参数集（形状=model-params.json 未来实体） ============ */
+const SESSION_MODEL = 'deepseek-reasoner';
+const DEFAULTS = { limit: 3, verifyMode: 'auto', far: 3, near: 1, dipMax: 1, vExpect: 'improve', mode: 'correct', cost: '', law: '', guard: 2, mergeMs: 60, reviewWords: '确认,通过,同意,继续,开工', triggerWords: '/分级,分级任务：,@分级' };
+const MODELS = {
+  'deepseek-chat':        { ...DEFAULTS },
+  'deepseek-reasoner':    { ...DEFAULTS, limit: 4, cost: '失败态→∞：闸参数无来源=直拒；渲染偏移：按 P1-P23 对照方法重测', law: '观测到 ΔV 持平 → re-linearize（禁止再调装饰参数）', mode: 'correct' },
+  'glm-4.6':              { ...DEFAULTS, verifyMode: 'self-redteam', far: 4, near: 2, dipMax: 2, mode: 'research', mergeMs: 80 },
+};
+const LEGAL = { limit: [1, 8], far: [2, 8], near: [1, 6], dipMax: [1, 3], guard: [1, 5], mergeMs: [20, 500] };
+let active = SESSION_MODEL;
+
+/* ============ 左栏 ============ */
+const side = document.getElementById('side');
+for (const [name, on] of [['常规', 0], ['模型', 0], ['插件', 0], ['快捷键', 0], ['最优律参数', 1]]) {
+  const e = document.createElement('div'); e.className = 's-item' + (on ? ' on' : ''); e.textContent = name; side.appendChild(e);
+}
+const addModel = () => { const name = prompt('新模型 id（mock）'); if (name && !MODELS[name]) { MODELS[name] = { ...DEFAULTS }; render(); } };
+
+/* ============ 主渲染：单一入口全量重建（串值防护不变式） ============ */
+function render() {
+  document.getElementById('models').innerHTML = '';
+  for (const id of Object.keys(MODELS)) {
+    const c = document.createElement('div'); c.className = 'chip' + (id === active ? ' on' : ''); c.dataset.model = id;
+    c.innerHTML = id + (id === SESSION_MODEL ? '<span class="cur">当前会话</span>' : '');
+    c.onclick = () => { active = id; render(); }; // 切换=全量重渲染，无增量赋值
+    document.getElementById('models').appendChild(c);
+  }
+  const add = document.createElement('div'); add.className = 'chip add'; add.textContent = '＋ 新增模型'; add.onclick = addModel;
+  document.getElementById('models').appendChild(add);
+  const p = MODELS[active]; const box = document.getElementById('cards'); box.innerHTML = '';
+  const card = (title, tag) => { const d = document.createElement('div'); d.className = 'card'; d.appendChild(document.createElement('h3')).innerHTML = title + (tag ? ' <span class="tag">' + tag + '</span>' : ''); box.appendChild(d); return d; };
+  const field = (labelText, ctrl, hint) => { const r = document.createElement('div'); r.className = 'row';
+    const l = document.createElement('label'); l.textContent = labelText; r.appendChild(l); r.appendChild(ctrl);
+    if (hint) { const h = document.createElement('span'); h.className = 'hint'; h.textContent = hint; r.appendChild(h); } return r; };
+  const num = (key, min, max, note) => {
+    const i = document.createElement('input'); i.type = 'number'; i.value = p[key]; i.min = min; i.max = max; i.dataset.key = key;
+    const msg = document.createElement('span'); msg.className = 'errmsg';
+    i.addEventListener('blur', () => {
+      let v = Number(i.value); let bad = null;
+      if (!Number.isFinite(v) || v < min) { v = min; bad = '低于合法域，已 clamp→' + min; }
+      else if (v > max) { v = max; bad = '超出合法域，已 clamp→' + max; }
+      if (key === 'far' && v <= p.near) { v = p.near + 1; bad = 'far 须 > near，已修正→' + v; }
+      if (key === 'near' && v >= p.far) { v = Math.max(LEGAL.near[0], p.far - 1); bad = 'near 须 < far，已修正→' + v; }
+      i.classList.toggle('err', !!bad); msg.classList.toggle('on', !!bad); msg.textContent = bad || '';
+      i.value = v; save(key, v);
+    });
+    const wrap = document.createElement('span'); wrap.appendChild(i); wrap.appendChild(msg);
+    return field(labelText, wrap, note);
+  };
+  const sel = (key, opts) => { const s = document.createElement('select'); s.dataset.key = key;
+    for (const o of opts) { const e = document.createElement('option'); e.value = o; e.textContent = o; if (p[key] === o) e.selected = true; s.appendChild(e); }
+    s.onchange = () => save(key, s.value); return s; };
+  const txt = (key, ph) => { const t = document.createElement('textarea'); t.dataset.key = key; t.value = p[key]; t.placeholder = ph;
+    t.onblur = () => save(key, t.value); return t; };
+  const save = (key, val) => { MODELS[active][key] = val; toast('✓ 已保存（mock）· ' + active + ' · ' + key + '=' + (String(val).slice(0, 24)) + (String(val).length > 24 ? '…' : '')); };
+  /* ① 基础 */
+  const c1 = card('基础', 'conceptLimit / verifyMode');
+  c1.appendChild(field('容量带上限 conceptLimit', num2('limit', 1, 8), '1~8（不变式+预测合计带）'));
+  c1.appendChild(field('检测模式 verifyMode', sel('verifyMode', ['auto', 'self-redteam', 'subagent']), ''));
+  function num2(key, min, max) { const i = document.createElement('input'); i.type = 'number'; i.value = p[key]; i.min = min; i.max = max; i.dataset.key = key;
+    i.onblur = () => { let v = Math.min(max, Math.max(min, Number(i.value) || min)); i.value = v; save(key, v); }; return i; }
+  /* ② ΔV 分档 */
+  const c2 = card('ΔV 分档阈值', '闸灵敏度 · 闸本体不可调');
+  c2.appendChild(num('far', 2, 8, '未闭合 ≥ far → far 档'));
+  c2.appendChild(num('near', 1, 6, '≥ near → near 档'));
+  c2.appendChild(num('dipMax', 1, 3, '连续 dip 上限'));
+  /* ③ 默认模板 */
+  const c3 = card('默认模板', 'declare 缺省注入 · 显式优先');
+  const r3a = document.createElement('div'); r3a.className = 'row'; const l3a = document.createElement('label'); l3a.textContent = 'cost 权重模板'; r3a.appendChild(l3a); r3a.appendChild(txt('cost', '每行一条：失败→防错（→∞=不可能发生）')); c3.appendChild(r3a);
+  const r3b = document.createElement('div'); r3b.className = 'row'; const l3b = document.createElement('label'); l3b.textContent = 'law 偏差策略模板'; r3b.appendChild(l3b); r3b.appendChild(txt('law', '每行：观测 X → 动作 Y')); c3.appendChild(r3b);
+  c3.appendChild(field('vExpect 建议', sel('vExpect', ['improve', 'dip']), ''));
+  c3.appendChild(e('div', { className: 'hint', style: { fontSize: '11px', padding: '4px 0' } }, '⚖ 代价权重档位（三选一已废）：catastrophic=不可能发生·权重→∞ / major=必须成立 / minor=可容忍——断言级定义在 cost_set，此处为声明侧默认值'));
+  /* ④ 高级区（默认折叠：初始仅 1 控件） */
+  const c4 = card('<span class="adv-head">⚙ 高级区（节流/词表）<span class="adv-sum">defer guard · 合并窗 · 审核/触发词表</span><span class="tag">展开</span></span>');
+  c4.classList.add('adv');
+  const head = c4.querySelector('.adv-head');
+  head.addEventListener('click', () => { c4.classList.toggle('open'); head.querySelector('.tag').textContent = c4.classList.contains('open') ? '收起' : '展开'; });
+  const body = document.createElement('div'); body.className = 'adv-body';
+  body.appendChild(field('自动续轮 guard 上限', num2('guard', 1, 5), '防爆计数/小类'));
+  body.appendChild(field('引导合并窗 ms', num2('mergeMs', 20, 500), '同 turn 合流'));
+  body.appendChild(field('审核词表', txt('reviewWords', ''), '逗号分词'));
+  body.appendChild(field('触发词表', txt('triggerWords', ''), '逗号分词'));
+  c4.appendChild(body);
+}
+function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 2600); }
+render();
+</script>
+</body>
+</html>

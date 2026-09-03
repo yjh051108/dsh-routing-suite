@@ -1,0 +1,5 @@
+# dsh-closedloop-mode bundle 层：插入插件行（v0.3 最优律闭环；/optimal 开单，不激活=官方零痕迹）。
+- insert:
+    - id: dsh-closedloop-mode
+      name: '@dsh-external/dsh-closedloop-mode'
+      config: {}

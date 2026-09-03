@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dsh-optimal-mode · hover 进度面板设计稿</title>
+<style>
+  /* DSH 暗色 theme var 体系（带兜底值） */
+  :root {
+    --bg: var(--theme-bg, #0d1117);
+    --panel: var(--theme-panel, #161b22);
+    --panel-2: var(--theme-panel-2, #1c2128);
+    --border: var(--theme-border, #30363d);
+    --text: var(--theme-text, #e6edf3);
+    --text-dim: var(--theme-text-dim, #8b949e);
+    --accent: var(--theme-accent, #58a6ff);
+    --ok: var(--theme-ok, #3fb950);
+    --warn: var(--theme-warn, #d29922);
+    --far: #f85149; --near: #d29922; --at: #3fb950;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font: 13px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif; min-height: 100vh; }
+
+  /* 模拟 DSH 顶栏 */
+  .topbar { position: fixed; top: 0; left: 0; right: 0; height: 44px; background: var(--panel); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; padding: 0 14px; gap: 10px; z-index: 10; }
+  .topbar .brand { font-weight: 600; color: var(--text); }
+  .topbar .crumb { color: var(--text-dim); font-size: 12px; }
+  .spacer { flex: 1; }
+
+  /* 徽章（右上锚定） */
+  .badge { position: relative; display: flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--panel-2); cursor: pointer; user-select: none; }
+  .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .badge .pct { font-size: 12px; color: var(--text-dim); }
+  .badge.pinned { border-color: var(--accent); }
+
+  /* hover 小面板：宽 340 ≤360，max-height 480 内容滚动 */
+  .panel { position: absolute; top: 40px; right: 10px; width: 340px; max-height: 480px; overflow-y: auto;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(1,4,9,.7); padding: 12px; display: flex; flex-direction: column; gap: 12px;
+    opacity: 0; transform: translateY(-6px); pointer-events: none; transition: opacity .16s ease, transform .16s ease; }
+  .badge-wrap { position: absolute; top: 6px; right: 10px; }
+  .badge-wrap.open .panel, .badge-wrap.pinned .panel { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+  .sec-title { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; display:flex; justify-content:space-between; }
+
+  /* ① 树进度 */
+  .overall { margin-bottom: 8px; }
+  .bar { height: 5px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: var(--w); background: linear-gradient(90deg, var(--accent), var(--ok)); border-radius: 3px; transition: width .3s; }
+  .grp { border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; margin-top: 6px; background: var(--panel-2); cursor: pointer; }
+  .grp .g-head { display: flex; align-items: center; gap: 6px; }
+  .grp .caret { color: var(--text-dim); transition: transform .15s; }
+  .grp.open .caret { transform: rotate(90deg); }
+  .grp .g-name { flex: 1; font-weight: 600; font-size: 12.5px; }
+  .grp .g-count { font-size: 11px; color: var(--text-dim); }
+  .grp .items { display: none; margin-top: 6px; }
+  .grp.open .items { display: block; }
+  .item { display: flex; align-items: center; gap: 6px; padding: 2.5px 0 2.5px 16px; color: var(--text-dim); font-size: 12px; }
+  .item .st { width: 14px; text-align: center; }
+  .item.done .st { color: var(--ok); } .item.doing .st { color: var(--warn); }
+  .item .vchip { margin-left: auto; font-size: 10px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--border); color: var(--text-dim); }
+
+  /* ② V 时间线（far→near→at 阶梯） */
+  .vline { display: flex; align-items: flex-end; gap: 0; height: 74px; padding: 6px 2px 0; }
+  .v-node { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; position: relative; }
+  .v-node .stem { width: 2px; background: var(--border); flex: none; }
+  .v-node .mark { width: 12px; height: 12px; border-radius: 50%; border: 2px solid; background: var(--panel); z-index: 1; }
+  .v-node.far .mark { border-color: var(--far); } .v-node.near .mark { border-color: var(--near); } .v-node.at .mark { border-color: var(--at); }
+  .v-node .lab { font-size: 10px; color: var(--text-dim); margin-top: 4px; }
+  .v-node .step { font-size: 10.5px; color: var(--text); max-width: 86px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .v-node .n { position: absolute; top: -14px; font-size: 10px; color: var(--text-dim); }
+  .v-node .arrow { position: absolute; right: -8px; bottom: 30px; color: var(--text-dim); font-size: 11px; }
+  .dip-chip { position: absolute; top: -16px; right: 2px; font-size: 9.5px; color: var(--warn); border: 1px solid var(--warn);
+    background: rgba(210,153,34,.12); border-radius: 7px; padding: 0 5px; }
+  .v-meta { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-dim); margin-top: 2px; }
+
+  /* ③ 当前模型态 */
+  .model { display: flex; align-items: center; gap: 8px; }
+  .model .m-badge { font-size: 11.5px; font-weight: 600; color: var(--accent); border: 1px solid var(--accent); border-radius: 8px; padding: 1px 8px; background: rgba(88,166,255,.1); }
+  .model .m-sum { font-size: 11px; color: var(--text-dim); line-height: 1.45; }
+  .foot { font-size: 10px; color: var(--text-dim); text-align: center; padding-top: 2px; border-top: 1px dashed var(--border); }
+  .demo-hint { margin: 60px 18px 0; color: var(--text-dim); font-size: 13px; line-height: 2; }
+  .demo-hint b { color: var(--accent); }
+</style>
+</head>
+<!-- 历史文档（grade/v0.2 时代谱系）：现行以 THEORY-v0.3 为准 -->
+<body>
+  <div class="topbar">
+    <span class="brand">DeepSeek Harness</span>
+    <span class="crumb">/ 会话 · dsh-optimal-mode 设计稿（hover 或点击右上徽章）</span>
+    <span class="spacer"></span>
+    <div class="badge-wrap" id="wrap">
+      <div class="badge" id="badge"><span class="dot"></span><span class="pct" id="badge-pct">—</span></div>
+      <div class="panel" id="panel" role="dialog" aria-label="进度面板"></div>
+    </div>
+  </div>
+
+  <p class="demo-hint"><b>✅ v0.2 定稿</b>——已实现于 client 徽章面板（主体=V 账本阶梯，数据源 /graded-mode/api/panel；本图计划树区在实现中降为可展开 details）。<br>设计稿 · hover 进度小面板：右上徽章 <b>悬停展开 / 移开收起 / 点击钉住</b>。<br>
+  数据形状=真实盘档（本会话计划树 6 大类 13 小类 / V 序带 far→near→at / 模型参数摘要）。</p>
+
+<script>
+/* ============ 示例数据：取真实盘档形状（本会话计划树节选） ============ */
+const MODEL = { id: 'deepseek-reasoner', params: 'limit 3 · verify auto · 分档 far≥3/near≥1 · 模板: 已配 cost/law 各 1' };
+const TREE = {
+  total: 13, done: 1,
+  groups: [
+    { name: '设计稿先行', items: [
+      { name: 'hover 面板设计稿', s: 'done',  band: 'near' },
+      { name: '参数页设计稿',   s: 'pending', band: null },
+    ]},
+    { name: '模型层参数地基', collapsed: true, items: [
+      { name: '参数 schema 与存储', s: 'pending', band: null },
+      { name: '模型解析与 API',    s: 'pending', band: null },
+      { name: '旧设置作废迁移',    s: 'pending', band: null },
+    ]},
+  ],
+};
+const V = { steps: [
+  { n: 1, title: '旧两级设置→模型层', band: 'far',  counts: '契约5·吻合6' },
+  { n: 2, title: 'hover 面板设计稿',  band: 'near', counts: '契约7·吻合5', dip: null },
+  { n: 3, title: '真机端到端',        band: 'at',   counts: '规划',        dip: 'dip 挂账×1' },
+], pendingDip: 1 };
+
+/* ============ 渲染（JS 建 DOM——非贴图） ============ */
+const pct = Math.round(TREE.done / TREE.total * 1000) / 10;
+document.getElementById('badge-pct').textContent = TREE.done + '/' + TREE.total + ' · ' + pct + '%';
+
+const panel = document.getElementById('panel');
+const h = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+
+/* ① 树进度块（主体） */
+const sec1 = h('div');
+sec1.appendChild(h('div', 'sec-title', '<span>计划树进度</span><span>' + TREE.done + '/' + TREE.total + '</span>'));
+const ov = h('div', 'overall');
+const bar = h('div', 'bar'); const fill = h('i'); fill.style.setProperty('--w', pct + '%'); bar.appendChild(fill);
+ov.appendChild(h('div', null, '<span style="font-size:11px;color:var(--text-dim)">总完成度 ' + pct + '%</span>')); ov.appendChild(bar);
+sec1.appendChild(ov);
+for (const g of TREE.groups) {
+  const card = h('div', 'grp' + (g.collapsed ? '' : ' open'));
+  const dn = g.items.filter(i => i.s === 'done').length;
+  card.appendChild(h('div', 'g-head', '<span class="caret">▸</span><span class="g-name">' + g.name + '</span><span class="g-count">' + dn + '/' + g.items.length + '</span>'));
+  const wrap = h('div', 'items');
+  for (const it of g.items) {
+    const row = h('div', 'item ' + it.s,
+      '<span class="st">' + (it.s === 'done' ? '●' : it.s === 'doing' ? '◐' : '○') + '</span><span>' + it.name + '</span>' + (it.band ? '<span class="vchip">V ' + it.band + '</span>' : ''));
+    wrap.appendChild(row);
+  }
+  card.appendChild(wrap);
+  card.addEventListener('click', () => card.classList.toggle('open'));
+  sec1.appendChild(card);
+}
+panel.appendChild(sec1);
+
+/* ② V 时间线（阶梯） */
+const sec2 = h('div');
+sec2.appendChild(h('div', 'sec-title', '<span>V 时间线（cost-to-go）</span><span>dip 挂账 ×' + V.pendingDip + '</span>'));
+const line = h('div', 'vline');
+const heights = { far: 14, near: 34, at: 54 };
+for (let idx = 0; idx < V.steps.length; idx++) {
+  const s = V.steps[idx];
+  const nd = h('div', 'v-node ' + s.band);
+  nd.appendChild(h('span', 'n', '#' + s.n));
+  const stem = h('span', 'stem'); stem.style.height = heights[s.band] + 'px';
+  nd.appendChild(h('span', 'step', s.title)); nd.appendChild(stem); nd.appendChild(h('span', 'mark'));
+  nd.appendChild(h('span', 'lab', s.band + ' · ' + s.counts));
+  if (idx < V.steps.length - 1) nd.appendChild(h('span', 'arrow', '→'));
+  if (s.dip) nd.appendChild(h('span', 'dip-chip', s.dip));
+  line.appendChild(nd);
+}
+sec2.appendChild(line);
+sec2.appendChild(h('div', 'v-meta', '<span>链：far → near → at（回升义务核销 ×2）</span><span>共 3 闭合步</span>'));
+panel.appendChild(sec2);
+
+/* ③ 当前模型态（底部徽标） */
+const sec3 = h('div');
+sec3.appendChild(h('div', 'sec-title', '<span>当前模型态</span>'));
+const m = h('div', 'model');
+m.appendChild(h('span', 'm-badge', MODEL.id));
+m.appendChild(h('span', 'm-sum', MODEL.params));
+sec3.appendChild(m);
+panel.appendChild(sec3);
+panel.appendChild(h('div', 'foot', 'dsh-optimal-mode · 数据源 /graded-mode/api/panel（设计稿假数据=真形状）'));
+
+/* ============ hover/点击交互 ============ */
+const wrap = document.getElementById('wrap'), badge = document.getElementById('badge');
+let pinned = false;
+badge.addEventListener('click', () => { pinned = !pinned; wrap.classList.toggle('pinned', pinned); wrap.classList.toggle('open', pinned || wrap.classList.contains('open')); });
+wrap.addEventListener('mouseenter', () => wrap.classList.add('open'));
+wrap.addEventListener('mouseleave', () => { if (!pinned) wrap.classList.remove('open'); });
+badge.focus(); // 初始焦点，键盘也可用 Tab+Enter
+</script>
+</body>
+</html>

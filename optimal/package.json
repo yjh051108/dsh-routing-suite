@@ -1,0 +1,50 @@
+{
+  "name": "@dsh-external/dsh-closedloop-mode",
+  "version": "0.3.0",
+  "description": "分级模式 v0.1.0 · 最优律驱动（LQR 结构律）：小类=可推导闭合的增量块。每块 optimal_declare 契约（不变式链/预测值含来源/代价权重/偏差策略 law/双通道 measure/ΔV 序带预期+dip 例外）→ 实现 → optimal_converge 三要素（cost-to-go 严格降×数值「≠」非同源复算×双通道一致）closed 自动打卡；invalidated=re-linearize（模型签名反漂移,定理6）。保留两级锁定/审核规格单/组收官/红队门/审计面板，共 10 工具。",
+  "license": "Apache-2.0",
+  "private": false,
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "scripts",
+    "client",
+    "docs",
+    "cordis.patch.yml",
+    "dsh.plugin.json",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "dsh": ">=0.0.1-rc"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.2"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --check lib/index.js && node --check lib/tools.js && echo 'OK: lib 语法面自检（完整测试面在开发工作区，需本地会话盘档）'"
+  }
+}
