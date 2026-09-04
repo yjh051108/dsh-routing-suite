@@ -1,5 +1,5 @@
 /**
- * build — dsh-closedloop-mode host 构建：把 src/*.js 复制到 lib/（纯 ESM,零编译,产物即源码）。
+ * build — dsh-optimal-mode host 构建：把 src/*.js 复制到 lib/（纯 ESM,零编译,产物即源码）。
  *
  * 为什么 lib/（而非官方链 src 直跑）：注入器热重载/自重载通道按「构建产物形态」工作
  * （<pkg>/lib/index.js + 磁盘降级 import realpath），src 直跑不在 loader 缓存匹配范围,

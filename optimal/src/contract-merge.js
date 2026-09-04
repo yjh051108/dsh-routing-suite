@@ -65,7 +65,7 @@ export function materialize(surface, diff) {
       wrongSignal: String(d.wrong || '任一预测实测≠声明，或通道标识非两两不同'),
       channels,
     },
-    vExpect: d.vExpect === 'dip' ? 'dip' : 'improve',
+    vExpect: ['dip', 'maintain'].includes(d.vExpect) ? d.vExpect : 'improve',
     dipPlan: String(d.dipPlan || ''),
     confidence: ['high', 'medium', 'low'].includes(d.confidence) ? d.confidence : 'medium',
   }

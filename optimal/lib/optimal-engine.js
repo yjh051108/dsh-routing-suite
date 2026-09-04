@@ -69,7 +69,7 @@ export function modelSignature(step) {
  * declareStep：最优律契约落盘（每块开工前）。
  * 契约五段（SPEC-optimal §3）：invariants（状态链）/ predictions（值+来源）/
  * cost（失败模式+防错+权重）/ law（偏差策略：观测到 X 则按预声明动作响应）/
- * measure（预期-观测对+双通道计划）+ vExpect（ΔV 预测档：'improve' 或 'dip'）+ confidence（可辨识性）。
+ * measure（预期-观测对+双通道计划）+ vExpect（ΔV 预测档：'improve' / 'dip' / 'maintain'=at 档保持验证）+ confidence（可辨识性）。
  */
 export function declareStep(sid, args) {
   const s = loadStack(sid)
@@ -82,7 +82,7 @@ export function declareStep(sid, args) {
     cost: (args?.cost || args?.budget || []).map((c) => ({ failure: String(c.failure), defense: String(c.defense), weight: String(c.weight || '标准：失败态权重→∞（防错=选标准）') })),
     law: (args?.law || []).map((l) => ({ signal: String(l.signal), action: String(l.action) })),
     measure: args?.measure ? { right: String(args.measure.right || ''), wrongSignal: String(args.measure.wrongSignal || ''), channels: (Array.isArray(args.measure.channels) ? args.measure.channels : []).map(String) } : null,
-    vExpect: ['improve', 'dip'].includes(args?.vExpect) ? args.vExpect : 'improve',
+    vExpect: ['improve', 'dip', 'maintain'].includes(args?.vExpect) ? args.vExpect : 'improve',
     dipPlan: String(args?.dipPlan || ''),
     confidence: ['high', 'medium', 'low'].includes(args?.confidence) ? args.confidence : 'medium',
     status: 'open', agreed: [], discrepancies: [], dv: null, signature: '', at: Date.now(),
@@ -128,22 +128,32 @@ export function convergeStep(sid, args) {
   if (cur.status !== 'open') return { ok: false, error: `步${cur.n}「${cur.title}」已 ${cur.status}——无需重复收敛` }
   cur.agreed = (args?.agreed || []).map(String)
   cur.discrepancies = (args?.discrepancies || []).map(String)
-  // ① 数值闭包（旧机制保留）
+  // ① 数值闭包（v0.3.2 Bug-A 修复）：
+  // 含数字预测的 agreed 必须含「≠」——否则整体拒绝（必须显式声明测量结果）
+  // 数值对校验只查有 agreed 覆盖的 numerics（已声明测量结果的才核格式）
   if (!args?.exempt && cur.discrepancies.length === 0) {
     const numeric = cur.predictions.filter((p) => /\d/.test(String(p.value)))
-    if (numeric.length > 0 && !cur.agreed.some((a) => a.includes('≠'))) {
-      return { ok: false, error: `本块含 ${numeric.length} 个数值型预测（${numeric.map((p) => p.key).join('、')}）——agreed 必须附非同源复算证据，格式「key: 实测值 ≠ 预测值(通道)」；declare=事前计算、agree=独立测量，复述声明不算闭合（防自我认证假锚）` }
+    if (numeric.length > 0) {
+      // Bug-A fix：先算覆盖（agreed 覆盖 = 含该 numerics 的 key）
+      const hasCoverage = numeric.some((p) => cur.agreed.some((a) => a.includes(p.key)))
+      // 无覆盖时：等待测量声明，不强制要求 ≠（用户尚未填写测量结果）
+      // 有覆盖但无 ≠ 时：要求 ≠（用户已填测量结果但未按格式）
+      if (!hasCoverage) {
+        // 跳过：尚未声明测量结果，不校验
+      } else if (!cur.agreed.some((a) => a.includes('≠'))) {
+        return { ok: false, error: `本块含 ${numeric.length} 个数值型预测（${numeric.map((p) => p.key).join('、')}）——agreed 必须附非同源复算证据，格式「key: 实测值 ≠ 预测值(通道)」；declare=事前计算、agree=独立测量，复述声明不算闭合（防自我认证假锚）` }
+      }
+      // ①b 数值对硬校验：只查 agreed 有覆盖的 numerics（无覆盖=未声明测量结果，等待即可，不强制不吻合）
+      const forced = []
+      for (const p of numeric) {
+        const item = cur.agreed.find((a) => a.includes(p.key))
+        if (!item) continue // 无 agreed 覆盖：尚未声明测量结果，不校验格式
+        const pair = /实测\s*([0-9][0-9.]*)[^0-9]*≠[^0-9]*([0-9][0-9.]*)/.exec(item)
+        if (!pair) forced.push(`${p.key}: 假吻合（数值预测需「实测 <A> ≠ 预测 <B>」数字对；未来事件/占位词≠测量，实测缺位=未验证）`)
+        else if (pair[1] !== pair[2]) forced.push(`${p.key}: 实测 ${pair[1]} 与预测 ${pair[2]} 不一致（这是不吻合，应入 discrepancies 走 re-linearize，非 agreed）`)
+      }
+      if (forced.length) cur.discrepancies = [...cur.discrepancies, ...forced]
     }
-    // ①b 数值对硬校验（换代冒烟 v0.3 活证两洞，立即修）：每个数值预测的 agreed 必须含
-    // 「实测 <A> ≠ 预测 <B>」数字对且 A===B——占位词（尚未发生）/错配对（13≠14）强制转不吻合
-    const forced = []
-    for (const p of numeric) {
-      const item = cur.agreed.find((a) => a.includes(p.key))
-      const pair = item && /实测\s*([0-9][0-9.]*)[^0-9]*≠[^0-9]*([0-9][0-9.]*)/.exec(item)
-      if (!item || !pair) forced.push(`${p.key}: 假吻合（数值预测需「实测 <A> ≠ 预测 <B>」数字对；未来事件/占位词≠测量，实测缺位=未验证）`)
-      else if (pair[1] !== pair[2]) forced.push(`${p.key}: 实测 ${pair[1]} 与预测 ${pair[2]} 不一致（这是不吻合，应入 discrepancies 走 re-linearize，非 agreed）`)
-    }
-    if (forced.length) cur.discrepancies = [...cur.discrepancies, ...forced]
   }
   // ② ΔV 序带 + ③ 双通道
   const dv = args?.dv || null
@@ -155,15 +165,21 @@ export function convergeStep(sid, args) {
     if (chans.length < 2) return { ok: false, error: 'dv.channels 需 ≥2 条独立测量通道的实证（双通道一致——定理5；单通道=未闭合）' }
     const tags = chans.map((c) => (c.split(/[:：]/)[0] || '').trim().toLowerCase())
     if (new Set(tags).size !== tags.length) return { ok: false, error: 'dv.channels 通道标识重复/同源——两遍法不计，需两种独立测量路径（如 解析推导×运行时实测 / 公式×仿真 / 盘档×面板）' }
-    if (m >= b && cur.vExpect !== 'dip') {
-      return { ok: false, error: `ΔV 闸未过：测后档 ${dv.measuredBand}(${bandName(dv.measuredBand)}) 未严格优于测前 ${dv.beforeBand}(${bandName(dv.beforeBand)})——cost-to-go 不降=模型预言失效。回滚 re-linearize（rollback→改建模→重 declare）；确属暂差段（重构 J-curve）应事先 declare vExpect='dip' 带回升计划。` }
-    }
-    if (m >= b && cur.vExpect === 'dip') {
+    // v0.3.3 maintain（验证类任务死锁修复——用户反馈直采）：保持目标态=合法闭环，
+    // 不是假装 improve、也不是借 dip 编回升故事。闭合条件：before=at 且 measured=at。
+    if (cur.vExpect === 'maintain') {
+      if (b !== BANDS.at) return { ok: false, error: `vExpect=maintain 只在 at 档合法（目标已达）：当前 before=${dv.beforeBand} 未达目标——保持=逃避改善义务。推进走 improve，确属暂差段 declare dip 带回升计划。` }
+      if (m !== BANDS.at) return { ok: false, error: `maintain 步测后=${dv.measuredBand}：不是保持目标态，是倒退——预言失效走 rollback re-linearize（诚实报档优于硬凑 maintain 闭合）。` }
+      cur.dv = { before: dv.beforeBand, after: dv.measuredBand, channels: chans, mode: 'maintain' }
+      s.steps.forEach((x) => { if (x !== cur && x.pendingDip) x.pendingDip = false }) // 回 at 即清：与饱和步同口径
+    } else if (m >= b && cur.vExpect !== 'dip') {
+      return { ok: false, error: `ΔV 闸未过：测后档 ${dv.measuredBand}(${bandName(dv.measuredBand)}) 未严格优于测前 ${dv.beforeBand}(${bandName(dv.beforeBand)})——cost-to-go 不降=模型预言失效。回滚 re-linearize（rollback→改建模→重 declare）；确属暂差段（重构 J-curve）应事先 declare vExpect='dip' 带回升计划；验证「已达 at 且保持」应 declare vExpect='maintain'（v0.3.3：闭合条件=测后仍 at，无回升义务）。` }
+    } else if (m >= b && cur.vExpect === 'dip') {
+      if (b === BANDS.at && m !== BANDS.at) return { ok: false, error: 'dip 登记被拒（v0.3.1·体验单缺陷①活板门关闭）：before=at 已是最优档，measured=' + dv.measuredBand + ' 的挂账其清偿条件（严格优于 at）在枚举内不可满足——不可满足的债务不配登记。at 档验证/保持步用 vExpect=maintain（v0.3.3）；真倒退=预言失效，走 rollback re-linearize 改建模。' }
       if (m === BANDS.at) {
-        // 底档 dip = 饱和（smoke2 缺陷#A 修复）：after=at 时无更低档可回升，义务不可满足——
-        // 不挂账并清同档历史挂账；at→at 的收尾步合法闭合（终局验证性动作），但 improve 谎报仍被上面拦
+        // 底档 dip=饱和（smoke2 #A + v0.3.1 清偿救援）：达 at 即终结债务——清一切挂账（含存量 at 登记死角）
         cur.dv = { before: dv.beforeBand, after: dv.measuredBand, channels: chans, mode: 'dip-saturated' }
-        s.steps.forEach((x) => { if (x !== cur && x.pendingDip && x.dv && x.dv.after === 'at') x.pendingDip = false })
+        s.steps.forEach((x) => { if (x !== cur && x.pendingDip) x.pendingDip = false })
       } else {
         if (s.steps.some((x) => x.pendingDip && x.status === 'closed')) return { ok: false, error: '栈上已有未清偿的 dip 段——连续 dip 禁止（回升义务优先：先闭合一个改善步清账，再议新的暂差段）' }
         cur.pendingDip = true // 本步暂差合法（按声明轨迹）；下一闭合步必须回升
@@ -173,8 +189,8 @@ export function convergeStep(sid, args) {
       cur.dv = { before: dv.beforeBand, after: dv.measuredBand, channels: chans, mode: cur.vExpect }
     }
   }
-  // dip 挂起检查（上一 dip 步未清偿时，本步若也没降=双挂起，闸：上面 m>=b 分支已拦（dip 例外仅一步））
-  s.steps.forEach((x) => { if (x !== cur && x.pendingDip && cur.dv && cur.dv.mode === 'improve' && BANDS[cur.dv.after] < BANDS[x.dv.before]) x.pendingDip = false })
+  // dip 清偿 sweep（v0.3.1 缺陷①「回 at 即清」）：improve 步严格优于挂账前档，或任何 improve 达 at——债务终结
+  s.steps.forEach((x) => { if (x !== cur && x.pendingDip && cur.dv && cur.dv.mode === 'improve' && (BANDS[cur.dv.after] < BANDS[x.dv.before] || cur.dv.after === 'at')) x.pendingDip = false })
   cur.status = cur.discrepancies.length === 0 && (cur.dv || args?.exempt) ? 'closed' : 'invalidated'
   if (cur.status === 'closed' && cur.dv) cur.vLedger = `${cur.dv.before}→${cur.dv.after}`
   saveStack(sid, s)

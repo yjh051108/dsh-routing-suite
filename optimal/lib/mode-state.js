@@ -70,14 +70,18 @@ const BANDS = ['far', 'near', 'at']
 
 /* ============================ 写面（v3 形状）——此标记之上禁现旧轨迹键 ============================ */
 
-/** 慢环合同规范化（cost 语义与 v2 一致：断言逐条 severity+source，nonGoals 确认制位）。 */
+/** 慢环合同规范化（cost 语义与 v2 一致：断言逐条 severity+source，nonGoals 确认制位）。
+ *  v0.4-S1：断言可选携 measure={cmd,kind,target}（测量函数）——条件展开防键漂移（round-trip 严格等值纪律）。 */
 export function normalizeCost(cost) {
   const strs = (a) => (Array.isArray(a) ? a.map((x) => String(x).trim()).filter(Boolean) : [])
+  const normMeasure = (x) => (x && typeof x === 'object' && String(x.cmd || '').trim()
+    ? { cmd: String(x.cmd).trim(), kind: ['bool', 'ratio', 'count'].includes(x.kind) ? x.kind : 'bool', target: typeof x.target === 'number' ? x.target : null }
+    : null)
   const assertions = Array.isArray(cost?.assertions)
     ? cost.assertions
         .map((a) => (typeof a === 'string'
           ? { text: a, severity: 'major', source: '旧盘档继承' } // 字符串条目=遗留形态（工具门只收对象），继承标记不冒充新立断言
-          : { text: String(a?.text || '').trim(), severity: SEVERITIES.includes(a?.severity) ? a.severity : '', source: String(a?.source || '').trim() }))
+          : { text: String(a?.text || '').trim(), severity: SEVERITIES.includes(a?.severity) ? a.severity : '', source: String(a?.source || '').trim(), ...(normMeasure(a?.measure) ? { measure: normMeasure(a.measure) } : {}) }))
         .filter((a) => a.text)
     : []
   return {
@@ -137,6 +141,8 @@ export function serializeState(s) {
     lastBand: BANDS.includes(s.lastBand) ? s.lastBand : null,
     dipPending: s.dipPending === true,
     terminalReport: s.terminalReport || undefined,
+    scanLog: s.scanLog || undefined, // v0.3.1④ 扫描诊断落盘（看见了什么可查账）
+    reviewNote: s.reviewNote || undefined, // v0.3.2 确认弹窗的补充意见（随 face 常驻可见）
     injected: [...(s.injected || [])],
   }
 }
@@ -158,6 +164,7 @@ export function deserializeState(obj) {
       group: String(c?.group || '').trim(),
       at: typeof c?.at === 'number' ? c.at : null,
       band: BANDS.includes(c?.band) ? c.band : null,
+      ...(typeof c?.v === 'number' ? { v: c.v } : {}),
       audit: c?.audit || null,
     })).filter((c) => c.title),
     lastBand: BANDS.includes(obj.lastBand) ? obj.lastBand : null,
@@ -165,6 +172,8 @@ export function deserializeState(obj) {
     injected: new Set(Array.isArray(obj.injected) ? obj.injected : []),
   }
   if (obj.terminalReport) s.terminalReport = obj.terminalReport // 缺位=无键（round-trip 严格等值，不造 undefined 键）
+  if (obj.scanLog && typeof obj.scanLog === 'object') s.scanLog = obj.scanLog
+  if (typeof obj.reviewNote === 'string' && obj.reviewNote) s.reviewNote = obj.reviewNote
   return s
 }
 
@@ -199,10 +208,10 @@ export function onWeightsFreeze(prev) {
 export function onWeightsConfirmed(prev) {
   return { ...(prev || initMode()), stage: 'rolling' }
 }
-/** 「修改」：唯一解锁口（慢环主权在用户）。 */
+/** 「修改」：唯一解锁口（慢环主权在用户）。 injected 幂等标记不清——v0.3.2 修复：解锁不擦脸注入记录 */
 export function onWeightsUnlock(prev) {
   const s = prev || initMode()
-  return { ...s, weightsLocked: false, stage: 'brainstorm', injected: new Set() }
+  return { ...s, weightsLocked: false, stage: 'brainstorm' }
 }
 
 /** 闭合落账：已闭集+实测残差读数的唯一写入通道（#3/#4 接线）。 */
@@ -213,6 +222,7 @@ export function recordClosed(prev, entry) {
     group: String(entry?.group || '').trim(),
     at: typeof entry?.at === 'number' ? entry.at : Date.now(),
     band: BANDS.includes(entry?.band) ? entry.band : null,
+    ...(typeof entry?.v === 'number' ? { v: entry.v } : {}), // v0.4-S1：闭合时刻基数 V 读数（条件展开防键漂移——round-trip 严格等值纪律）
     audit: entry?.audit || null,
   }
   if (!e.title) return { ok: false, error: 'recordClosed 需要 title' }
@@ -240,6 +250,7 @@ export function controlSurface(s) {
   return {
     stage: st.stage,
     task: st.task,
+    reviewNote: st.reviewNote || null,
     weightsLocked: st.weightsLocked,
     cost: st.cost,
     groups: st.groups.map((g) => ({ title: g.title, accept: g.accept, verify: g.verify, settled: !!g.settled })),

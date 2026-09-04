@@ -1,4 +1,29 @@
 # Changelog
+
+## 0.3.3（2026-09-04）maintain 版（用户开发体验反馈直采·验证类任务死锁根除）
+- **新 · vExpect='maintain'（第三态）**：保持目标态=合法闭环——闭合条件 before=at 且 measured=at，无回升义务、不挂 dipPending、回 at 清一切旧账（与饱和步同口径）；declare 回执自带语义注记。此前 at 档验证步只有两条邪路：谎报 improve（被拦）或借 dip 编回升故事（本会话现场活证：主会话为过 at→at 闸被迫 rollback+虚构「回升计划」——闸逼人讲故事即闸的失败）
+- **修 · 拒绝文教路**：at 档 improve 谎报的 ΔV 拒绝文本现明示 maintain 出路（「验证已达 at 且保持」应 declare vExpect='maintain'）——出路必须在违规现场可见，不靠模型回忆条款
+- 边界照守：maintain 在 far/near 档直拒（未达目标谈保持=逃避改善义务）；maintain 步测后掉档直拒（倒退≠保持，走 rollback re-linearize）——诚实报档优于硬凑闭合
+- 测试 78/78（新增 maintain 五面回归例：正路闭合/清旧账/非 at 拒/倒退拒/拒绝文教路）
+
+## 0.3.2（2026-09-04）会话实测补丁版（session 06dcbf00 归档分析·三 Bug 全闭环）
+
+- **修 · 数值闸 Bug-A（converge 过严）**：`declare` 含数字预测时，`converge` 的 agreed 若未覆盖该 key（用户尚未填测量结果）→ 原来误杀整体拒绝；修复：先判断 agreed 是否覆盖该 key，无覆盖则跳过（等待测量声明），有覆盖但缺 `≠` 才要求补格式——教学/演示场景不再被闸卡死
+- **修 · askUser CALLER_NOT_LIVE 未预判 Bug-B（freeze 弹窗在 subagent 里抛异常）**：`freeze` 在 subagent 里调用时 runtime 抛 `CALLER_NOT_LIVE`——原 catch 吞错回「UI 确认」假成功，模型误以为用户点了确认继续走后续流程；修复：`askUser` 入口预判 `agent.session?.id` 不存在直接回退文本/autoconfirm，不触发 runtime 异常
+- **修 · injected 幂等标记误清 Bug-C（onWeightsUnlock 清了注入记录导致 face 重复刷屏）**：解锁（weights→brainstorm）时 `onWeightsUnlock` 执行了 `injected: new Set()`——幂等键全清，下次 rolling 进 face 重复注入；修复：解锁只改 stage 回 brainstorm，注入记录跨解锁保持
+- **新 · declare/converge/rollback 链路自演进**：数值预测 key 不匹配场景走「覆盖检查→无覆盖跳过→用户补测量→下次闭合」自然路径，无需 rollback；教学演示不再因闸设计过严被迫回炉
+- 77/77 测试全绿（含新增 `v-no-cover` 场景测例）；热重载已生效
+
+## 0.3.1（2026-09-04）体验补课版（用户新会话实测三缺+现场幻影案全闭环·本单由 v0.3 引擎自跑）
+- **修 · dip 登记合法性（体验单缺陷①活板门）**：before=at 且 measured≠at 的 dip 登记直拒——不可满足的债务不配登记；报错自带出路（at 档只可收 at→at 饱和步，真倒退走 rollback re-linearize）
+- **修 · 回 at 即清（缺陷①建议采纳+②死锁根除）**：improve 步达 at 或饱和步清一切 pendingDip（含旧引擎登记的存量死角）；末组收口三角死锁随之消解——未开 ΔV 旁路（用户裁决维持）
+- **修 · 幻影 off 真凶（本会话两次清账悬案告破）**：pre-step 触发扫描全史重扫——命令回显滞留历史，每步重扫到就重执行 off。改为只评最近一条真实用户消息 + off 双确认 10s 窗口 + 执行前状态面自动备份 + armed/executed 留痕日志（含 sid）
+- **修 · 确认扫描形状兼容+可查账**：消息 content 字符串形兼容（「继续」不翻转根因之一）；scanLog{len,intent,stage,head} 落盘——扫描看见了什么从猜测变读账
+- **新 · autoConfirm 授权通道**：settings.autoConfirm=true 时 weights 自动确认并留痕（scanLog intent=autoConfirm）；授权凭据写死设置文件（用户原话『要能直接跳过确认环节完全自主』）；默认关闭=人工确认主权不变
+- **新 · final 自启动正式化**：final+全组 settled 态 cost_set 自主开新单（trigger 语义，旧单 V 账本栈不抹）——t10 单元实演+本单恢复路径活证双凭
+- 注入幂等提取 faceDecision 纯函数（可测）+inject 日志含 sid；三回归例入册（体验单序列原样回放）
+- 测试 75/75（尾行可重跑）；本单全程 v0.3 引擎自驭，含回炉自证：agreed 邻接格式违规被自家数值闸当场作废重宣
+
 ## 0.3.0（2026-09-04）闭环定序版（THEORY-v0.3 定理7 · 策略驻留引擎，轨迹涌现回路 · **breaking**）
 - **breaking · 块级轨迹冻结废除**：freeze 语义改为锁**权重+组结构+约束**（单一锁点 weightsLocked），块级序列与 vChain 块档链合同整体移除——动作由快环每步实时提议（cost-to-go 最小者），规划降级为先验，权重才是合同。旧盘档 v2 经 migrateLegacy 只读迁移（零回写；对照组 tag v0.2-baseline=5cea82f 冻结，旧目录全程 git 零改动）
 - **breaking · 差分契约 args=diff / engine=merge**：optimal_declare 收 {title,group,predict,channels,可选覆写}，链式量（beforeBand=盘档 lastBand 直读）、Q_N 成本投影、法基行由引擎物化后过**同一道闸**——契约书写 3.9KB/块→**0.4KB/动作（-89%，fit-plant 现跑复现）**，手抄错漏错误类整体消失

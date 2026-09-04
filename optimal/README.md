@@ -1,4 +1,4 @@
-# optimal — 最优律闭环协议插件（dsh-closedloop-mode v0.3.0）
+# optimal — 最优律闭环协议插件（dsh-closedloop-mode v0.3.3）
 
 > **更名与退役说明**：本目录前身为 `graded/`（dsh-graded-mode，0.0.1-rc1 时代，打卡制任务清单范式）。
 > 该插件已**退役**：v0.2 完成范式替换（控制循环即状态机），v0.3 定名 **dsh-closedloop-mode**——

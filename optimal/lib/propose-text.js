@@ -21,6 +21,7 @@ export function stateFace(surface) {
   const qn = s.cost || {}
   const lines = []
   lines.push(`【闭环·${s.stage || 'off'}】残差:组未落账=${(r.groupsOpen || []).length}·已闭动作=${r.closedCount || 0}·档=${r.lastBand || 'far'}·dip=${r.dipPending ? '未清' : '无'}`)
+  if (s.reviewNote) lines.push(`📌 用户补充（确认弹窗随附）：${cut(s.reviewNote, 120)}`)
   const as = (qn.assertions || []).map((a) => `${SEV_MARK[a?.severity] || '?'}${cut(a?.text, 28)}(${a?.severity || '?'})`)
   if (as.length) lines.push(`Q_N×${as.length}: ${as.join(' / ')}——全文盘档可展开`)
   const gs = (s.groups || []).map((g) => `${cut(g?.title, 24)}${g?.settled ? '✓' : ''}`).join(' ')
@@ -36,5 +37,5 @@ export function weightsFace(surface) {
   const s = surface || {}
   const qn = s.cost || {}
   return [`【闭环·合同已锁待确认】Q_N×${(qn.assertions || []).length}（⚡${(qn.assertions || []).filter((a) => a?.severity === 'catastrophic').length}）·组×${(s.groups || []).length}·非目标×${(qn.nonGoals || []).length}`,
-    '确认=开快环（每步实时定序）；「修改」=解锁重排。'].join('\n')
+    '确认=弹窗点选（可多选并附补充意见）；文本『确认』/autoConfirm 为无 UI 回退通道。'].join('\n')
 }

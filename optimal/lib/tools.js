@@ -12,15 +12,18 @@
  * output={ok,text}。教育=违规事件：拒绝文本即条款（引擎/审核模块自产，此处不复读）。
  */
 import {
-  initMode, loadState, saveState, SEVERITIES,
-  onCostCommit, onGroupsEdit, onWeightsFreeze, recordClosed, markGroupSettled,
+  initMode, loadState, saveState, SEVERITIES, trigger,
+  onCostCommit, onGroupsEdit, onWeightsFreeze, onWeightsConfirmed, onWeightsUnlock, recordClosed, markGroupSettled,
   controlSurface, terminalCheck, treeText, allGroupsSettled,
 } from './mode-state.js'
 import { declareStep, convergeStep, rollbackStep, loadStack, stackText, stackTop, optimalFileFor } from './optimal-engine.js'
 import { materialize } from './contract-merge.js'
 import { weightsFace } from './propose-text.js'
 import { auditBrief, parseVerdict, recordAuditVerdict } from './audit-dispatch.js'
+import { loadSpec, commitSpec } from './v04-grader.js'
+import { zOf, parseOutput, vCompute } from './v04-core.js'
 import { readFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 
 const TEXT = (text) => ([{ type: 'text', text: String(text) }])
 const OUT = {
@@ -34,12 +37,51 @@ const sidOf = (exec) => {
 }
 const mustState = (sid) => {
   const s = loadState(sid)
-  if (!s || s.stage === 'off') throw new Error('未激活：/分级 <任务> 或 cost_set 进入闭环协议')
+  if (!s || s.stage === 'off') throw new Error('未激活：/optimal <任务> 或 cost_set 进入闭环协议')
   return s
 }
 const cut = (s, n) => {
   const x = String(s || '')
   return x.length > n ? x.slice(0, n) + '…' : x
+}
+
+/** v0.3.2 回执认领制：工具输出已携带的引导=静默登记幂等键，pre-step 注入只补回执没覆盖的缝（消灭双通道重复） */
+const faceKeyOf = (s, top) => 'face:' + ((s && s.closed && s.closed.length) || 0) + ':' + (top ? top.n + top.status : 'idle')
+function claimGuidance(sid, { terminal = false } = {}) {
+  try {
+    const s = loadState(sid)
+    if (!s) return
+    const top = stackTop(loadStack(sid))
+    s.injected.add(faceKeyOf(s, top))
+    if (terminal) s.injected.add('terminal')
+    saveState(sid, s)
+  } catch { /* 认领失败=最多多一次注入，不阻断 */ }
+}
+
+/** v0.4-S1 基数 V 读数：跑带 measure 的断言 → z → V=Σw(1−z)。
+ *  无 measure 断言=返回 null（V 只覆盖已测投影——output feedback 诚实位，不装全知）。
+ *  runner 可注入（测试用假读数；默认宿主 execSync）。执行失败→该 z 由 stdout 残值或 0 定，不阻断。 */
+export const SEVERITY_W = { catastrophic: 4, major: 2, minor: 1 }
+export function measureReads(s, runner) {
+  // 裸 `node` 依赖 PATH——宿主进程 PATH 不保证有（V=4 首跑案底：沙箱绿/宿主 z=0）；
+  // 统一解析为当前进程自身的 node 二进制，测量执行面与 PATH 解耦。
+  const resolve = (cmd) => (/^node(?=[\s"'])/.test(cmd) ? process.execPath + cmd.slice(4) : cmd)
+  const run = runner || ((cmd) => execSync(resolve(cmd), { timeout: 20000, encoding: 'utf8' }))
+  const withM = (s?.cost?.assertions || []).filter((a) => a.measure && a.measure.cmd)
+  if (withM.length === 0) return null
+  const measures = [], zs = [], errs = []
+  for (const a of withM) {
+    const mm = { id: a.text.slice(0, 24), w: SEVERITY_W[a.severity] ?? 1, kind: a.measure.kind, target: a.measure.target }
+    let z = 0
+    try { z = zOf(mm, parseOutput(mm, String(run(a.measure.cmd) ?? ''), 0)) }
+    catch (ex) {
+      try { z = zOf(mm, parseOutput(mm, String(ex?.stdout ?? ''), 1)) } catch { z = 0 }
+      errs.push(`${mm.id.slice(0, 10)}:${String(ex?.message || ex).split('\n')[0].slice(0, 60)}`)
+    }
+    measures.push(mm); zs.push(Math.round(z * 100) / 100)
+  }
+  const v = vCompute(measures, Object.fromEntries(measures.map((mm, i) => [mm.id, zs[i]])))
+  return { V: v.V, green: zs.filter((x) => x >= 1).length, total: withM.length, zs, errs }
 }
 
 /** 组落账机械门（converge/audit_record 共用）：closeRequested 的组，全部动作在栈 closed
@@ -74,7 +116,7 @@ export function costSetDefinition() {
       type: 'object', additionalProperties: false, required: ['purpose'],
       properties: {
         purpose: { type: 'string', description: '目的宣言（一句话）' },
-        assertions: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['text', 'severity', 'source'], properties: { text: { type: 'string' }, severity: { type: 'string', enum: ['minor', 'major', 'catastrophic'] }, source: { type: 'string', description: '公式/条款/用户确认原话（空=拒）' } } } },
+        assertions: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['text', 'severity', 'source'], properties: { text: { type: 'string' }, severity: { type: 'string', enum: ['minor', 'major', 'catastrophic'] }, source: { type: 'string', description: '公式/条款/用户确认原话（空=拒）' }, measure: { type: 'object', additionalProperties: false, properties: { cmd: { type: 'string', description: 'v0.4-S1 测量函数：机械可执行的读数命令（如 npm test / node scripts/build.mjs）' }, kind: { type: 'string', enum: ['bool', 'ratio', 'count'], description: 'z 读数语义：bool=exit0；ratio/count=÷target 截断 [0,1]' }, target: { type: 'number' } } } } } },
         nonGoals: { type: 'array', items: { type: 'string' } },
         nonGoalsConfirmed: { type: 'boolean' },
         assumptions: { type: 'array', items: { type: 'string' } },
@@ -85,6 +127,10 @@ export function costSetDefinition() {
       const sid = sidOf(exec)
       if (args && ('requirements' in args || 'mode' in args)) throw new Error('cost_set：requirements/mode 已废——断言走 assertions[{text,severity,source}]。')
       let s = loadState(sid) || initMode()
+      if (s.stage === 'final' && allGroupsSettled(s)) { // v0.3.1③ final 自启动正式化：已终结旧单→新单（trigger 语义，V 账本栈不抹）
+        s = trigger(s, String(args?.purpose || '').slice(0, 60))
+        console.log('[closedloop] final→新单自启动（cost_set 正式通道）')
+      }
       if (s.weightsLocked) throw new Error('合同已锁（单一锁点）——开发中改口发文本『修改』解锁重排。')
       const p = String(args?.purpose || '').trim()
       if (!p || p.length < 12) throw new Error('purpose 必填且 ≥12 字（有信息量的目的宣言，非口号）')
@@ -151,10 +197,10 @@ export function decomposeDefinition() {
   }
 }
 
-export function freezeDefinition() {
+export function freezeDefinition(deps) {
   return {
     name: 'freeze',
-    description: '【冻结·单一锁点·慢环】锁 Q_N 权重 + 组结构 + 约束（非轨迹）。回执=合同评审单（weightsFace）；用户文本『确认』→ 快环开跑，『修改』→ 解锁重排（全段可逆，a2）。',
+    description: '【冻结·单一锁点·慢环】锁 Q_N 权重 + 组结构 + 约束（非轨迹）。回执=合同评审单（weightsFace）；确认=结构化弹窗（多选可附补充），文本『确认』/autoConfirm 为无 UI 回退。',
     parameters: { type: 'object', additionalProperties: false, required: [], properties: {} },
     output: OUT,
     async execute(_args, exec) {
@@ -162,10 +208,62 @@ export function freezeDefinition() {
       const s = mustState(sid)
       const r = onWeightsFreeze(s)
       if (!r.ok) throw new Error(r.error)
-      saveState(sid, r.state)
-      const surf = controlSurface(r.state)
-      const sheet = [weightsFace(surf), '', treeText(r.state), '', '（评审单全文在盘；回复『确认』开快环实时定序，『修改』解锁重排）'].join('\n')
-      return { ok: true, text: sheet }
+      let st = r.state
+      saveState(sid, st)
+      const sheet = [weightsFace(controlSurface(st)), '', treeText(st)].join('\n')
+      // v0.3.2 确认=结构化 UI 控件（ask_user_question 多选+补充文本同交）；无 UI 通道时回退文本/autoConfirm
+      if (deps?.askUser) {
+        let ans = { answers: [] }
+        try { ans = await deps.askUser(exec?.agent, st) || ans } catch (e) { ans = { answers: [], error: String(e?.message || e) } }
+        if (ans.error) return { ok: true, text: sheet + `\n⚠ 弹窗通道异常（回退文本/autoConfirm）：${String(ans.error).slice(0, 160)}` }
+        const a = (ans.answers || [])[0] || {}
+        const selected = a.selected || []
+        const custom = String(a.custom || '').trim()
+        const pickedGo = selected.some((x) => /确认/.test(x))
+        const pickedNo = selected.some((x) => /反驳|修改/.test(x))
+        // 按钮选择=显式意图；只写补充文字才降级正则判意图
+        const okGo = pickedGo && !pickedNo || (!selected.length && /确认|通过|同意|开快环|开工/.test(custom) && !/修改|反驳|重排|不对/.test(custom))
+        const noGo = pickedNo && !pickedGo || (!selected.length && /修改|反驳|重排|不对|不同意/.test(custom))
+        if (okGo) {
+          st = { ...onWeightsConfirmed(st), reviewNote: custom || undefined }
+          saveState(sid, st)
+          return { ok: true, text: sheet + `\n✅ UI 确认（${selected.join('+') || custom}）→ 快环已开${custom ? `；补充已落 reviewNote：「${custom.slice(0, 40)}」` : ''}` }
+        }
+        if (noGo) {
+          st = { ...onWeightsUnlock(st), reviewNote: (custom || selected.join(' ')) || undefined }
+          saveState(sid, st)
+          return { ok: true, text: sheet + `\n↩️ UI 反驳（${(custom || selected.join(' ')).slice(0, 40) || '修改'}）→ 已解锁回标定态（已闭账不丢），按补充意见重排后重新 freeze` }
+        }
+        return { ok: true, text: sheet + '\n⚠ 弹窗未获明确选择（含混/未选/双选）——保持待确认：可再 freeze 重弹，或文本回复『确认』/『修改』。' }
+      }
+      return { ok: true, text: sheet + '\n（无 UI 通道：文本『确认』/『修改』或 settings.autoConfirm 回退路径生效）' }
+    },
+  }
+}
+
+/* ============================ 判分器棘轮（v0.4-S1 上工具面） ============================ */
+
+export function measureProposeDefinition() {
+  return {
+    name: 'measure_propose',
+    description: '【判分器·棘轮单向阀 v0.4】提交 measure-spec（判分器集，宿主侧 graded-state/measures/ 落盘带 sha 历史链）：新增断言/升权重/升阈值=收紧，自动生效；删除/降权/降阈=机拒（判分器不可被被审者放松）；改测量命令或 kind=语义越权→人审队列，人工确认后携 humanApproved=true 重提。Everitt 因果分离的最小落地：策略可写判分器，但只有拧紧权。',
+    parameters: {
+      type: 'object', additionalProperties: false, required: ['measures'],
+      properties: {
+        measures: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['id', 'cmd'], properties: { id: { type: 'string' }, w: { type: 'number' }, cmd: { type: 'string' }, kind: { type: 'string', enum: ['bool', 'ratio', 'count'] }, target: { type: 'number' } } } },
+        humanApproved: { type: 'boolean', description: '仅在人审通过后置 true（cmd/kind 语义变更通道）' },
+      },
+    },
+    output: OUT,
+    async execute(args, exec) {
+      const sid = sidOf(exec)
+      mustState(sid)
+      const cur = loadSpec(sid)
+      const draft = { v: 4, measures: (Array.isArray(args?.measures) ? args.measures : []).map((x) => ({ ...x, w: typeof x.w === 'number' ? x.w : 1 })) }
+      const r = commitSpec(sid, draft, { humanApproved: args?.humanApproved === true })
+      if (!r.ok && r.needHuman) return { ok: true, text: `👤 人审队列（未落盘）：${r.queue.join('；')}\n语义变更超出棘轮机判权限——人工确认后人审重提携 humanApproved=true。` }
+      if (!r.ok) throw new Error(`棘轮机拒：${r.violations.join('；')}`)
+      return { ok: true, text: `✅ 判分器棘轮 ${r.verdict} 生效（sha=${r.sha}，measures ${draft.measures.length} 条，历史链 +1 宿主侧落盘）` }
     },
   }
 }
@@ -187,7 +285,7 @@ export function optimalDeclareDefinition() {
         law: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['signal', 'action'], properties: { signal: { type: 'string' }, action: { type: 'string' } } } },
         cost: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['failure', 'defense'], properties: { failure: { type: 'string' }, defense: { type: 'string' }, weight: { type: 'string' } } } },
         right: { type: 'string' }, wrong: { type: 'string' },
-        vExpect: { type: 'string', enum: ['improve', 'dip'] },
+        vExpect: { type: 'string', enum: ['improve', 'dip', 'maintain'] },
         dipPlan: { type: 'string' },
         confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
       },
@@ -214,7 +312,8 @@ export function optimalDeclareDefinition() {
       if (!r.ok) throw new Error(r.error)
       const lowNote = r.step.confidence === 'low' ? '\n⚠ 可辨识性=低：停下交分歧点，不得硬实现。' : ''
       const dipNote = r.step.vExpect === 'dip' ? '\n⚠ dip 已登记：回升义务挂账，下一闭合步必须改善。' : ''
-      return { ok: true, text: `✅ 动作「${r.step.title}」契约物化落盘（open·准入=${admission}）。预测 ${r.step.predictions.length}、通道 ${r.step.measure.channels.length}、law ${r.step.law.length}（含基行）、beforeBand=${controlSurface(s).residual.lastBand || 'far'}（引擎直读）${notes.length ? '\n' + notes.join('\n') : ''}${lowNote}${dipNote}` }
+      const maintainNote = r.step.vExpect === 'maintain' ? '\n⚠ maintain 已登记：本步闭合条件=测后仍 at（保持目标态验证，无回升义务；测后掉档=倒退直拒）。' : ''
+      return { ok: true, text: `✅ 动作「${r.step.title}」契约物化落盘（open·准入=${admission}）。预测 ${r.step.predictions.length}、通道 ${r.step.measure.channels.length}、law ${r.step.law.length}（含基行）、beforeBand=${controlSurface(s).residual.lastBand || 'far'}（引擎直读）${notes.length ? '\n' + notes.join('\n') : ''}${lowNote}${dipNote}${maintainNote}` }
     },
   }
 }
@@ -245,7 +344,9 @@ export function optimalConvergeDefinition() {
       let s = mustState(sid)
       const gTitle = String(args?.group || '').trim()
       s = { ...s, dipPending: loadStack(sid).steps.some((x) => x.pendingDip && x.dv && x.dv.after !== 'at') } // #B 修复：顶层挂账位与栈同步（饱和 dip 不计）
-      const rc = recordClosed(s, { title: r.step.title, group: gTitle, band: r.step.dv?.after, at: Date.now() })
+      let vr = null
+      try { vr = measureReads(s) } catch { vr = null } // v0.4-S1：基数 V 并显（测量失败=不显不阻断）
+      const rc = recordClosed(s, { title: r.step.title, group: gTitle, band: r.step.dv?.after, v: vr ? vr.V : undefined, at: Date.now() })
       if (rc.ok) s = rc.state
       const g = s.groups.find((x) => x.title === gTitle)
       let briefNote = ''
@@ -265,9 +366,11 @@ export function optimalConvergeDefinition() {
         notes.push(...tr.notes)
       }
       saveState(sid, s)
+      claimGuidance(sid, { terminal: s.stage === 'final' }) // 回执含残差+下一步指引：认领之，注入不再重复
       const surf = controlSurface(s)
       const head = `✅ 动作「${r.step.title}」closed（吻合 ${r.step.agreed.length} + ΔV ${r.step.dv.before}→${r.step.dv.after}）= V 账本锚点 · 残差:未落账组=${surf.residual.groupsOpen.length}·已闭=${surf.residual.closedCount}`
-      return { ok: true, text: [head, briefNote, notes.join('\n'), s.stage === 'final' ? '全链落账 → terminal_check 归零。' : ''].filter(Boolean).join('\n') }
+      const vLine = vr ? `📏 基数V=${vr.V}（已测断言 ${vr.green}/${vr.total}·z=[${vr.zs.join(', ')}]${vr.errs && vr.errs.length ? `·⚠ 读数失败诊断: ${vr.errs.join(' | ')}` : ''}——未测投影不入 V，output feedback 诚实位）` : ''
+      return { ok: true, text: [head, vLine, briefNote, notes.join('\n'), s.stage === 'final' ? '全链落账 → terminal_check 归零。' : ''].filter(Boolean).join('\n') }
     },
   }
 }
@@ -302,6 +405,7 @@ export function auditRecordDefinition(name = 'audit_record') {
       s2 = tr.state
       notes.push(...tr.notes)
       saveState(sid, s2)
+      claimGuidance(sid, { terminal: s2.stage === 'final' })
       return { ok: true, text: notes.join('\n') + (s2.stage === 'final' ? '\n全链落账 → terminal_check 归零。' : '') }
     },
   }

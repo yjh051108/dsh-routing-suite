@@ -1,6 +1,6 @@
 {
   "name": "@dsh-external/dsh-closedloop-mode",
-  "version": "0.3.0",
+  "version": "0.3.3",
   "description": "分级模式 v0.1.0 · 最优律驱动（LQR 结构律）：小类=可推导闭合的增量块。每块 optimal_declare 契约（不变式链/预测值含来源/代价权重/偏差策略 law/双通道 measure/ΔV 序带预期+dip 例外）→ 实现 → optimal_converge 三要素（cost-to-go 严格降×数值「≠」非同源复算×双通道一致）closed 自动打卡；invalidated=re-linearize（模型签名反漂移,定理6）。保留两级锁定/审核规格单/组收官/红队门/审计面板，共 10 工具。",
   "license": "Apache-2.0",
   "private": false,

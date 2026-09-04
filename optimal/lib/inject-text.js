@@ -10,9 +10,9 @@
  * 表为准（本文件刻意不写全词，避免自引用命中）。展示文本从不参与解析、从不参与判定。
  */
 
-export const VERSION = '0.3.0'
+export const VERSION = '0.3.3'
 
-/** /graded off 回执（模型可见的收口提示，唯一保留的固定文本）。 */
+/** /optimal off 回执（模型可见的收口提示，唯一保留的固定文本）。 */
 export function offReceipt() {
   return `✅ 最优律协议 v${VERSION} 已关闭。后续对话回归常规模式；重开：/optimal <任务>（或模型自主 cost_set 进入）。` +
     '已闭合的 V 账本（.optimal.json）保留——重开单不抹历史，盘档权威可跨代续。'

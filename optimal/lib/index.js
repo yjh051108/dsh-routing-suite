@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import {
-  initMode, loadState, saveState, serializeState, STAGE_SEMANTICS, controlSurface,
+  initMode, loadState, saveState, serializeState, STAGE_SEMANTICS, controlSurface, treeText,
   trigger, deactivate, loadConceptLimit, loadVerifyMode, onWeightsConfirmed, onWeightsUnlock,
   stateFileFor, stateDirFor,
 } from './mode-state.js'
@@ -28,9 +28,9 @@ import z from '@deepseek-ai/schemastery'
 
 export const name = 'dsh-closedloop-mode'
 
-/** 工具集唯一真相（v0.3：十一名，audit_record 在位；注册漂移 warn 兜底）。 */
-export const TOOL_NAMES = ['cost_set', 'decompose', 'freeze', 'optimal_declare', 'optimal_converge', 'audit_record', 'cost_audit', 'optimal_rollback', 'optimal_stack', 'revise_do', 'terminal_check']
-export const inject = ['commands', 'webServer', 'tools']
+/** 工具集唯一真相（v0.4-S1：十二名，measure_propose 入列；注册漂移 warn 兜底）。 */
+export const TOOL_NAMES = ['cost_set', 'decompose', 'freeze', 'measure_propose', 'optimal_declare', 'optimal_converge', 'audit_record', 'cost_audit', 'optimal_rollback', 'optimal_stack', 'revise_do', 'terminal_check']
+export const inject = ['commands', 'userQuestions', 'webServer', 'tools']
 export const Config = z.object({})
 
 const defaultDshHome = () => join(process.env.HOME || process.env.USERPROFILE || '.', '.dsh')
@@ -42,6 +42,14 @@ function userMsg(text) {
     source: { kind: 'plugin', plugin: name },
     content: [{ type: 'text', text }],
   }
+}
+
+/** 截断显示（v0.4-S1 补定义——此前写闸短句引用未定义的 cut，ReferenceError 被
+ *  外层 catch 静默吞掉 → saveState 永不执行 → face 幂等标记丢失 → 每步重注刷屏。
+ *  案底：session b74630b0 用户实拍 face-spam，scanLog/injected 双证定谳）。 */
+const cut = (s, n) => {
+  const x = String(s || '')
+  return x.length > n ? x.slice(0, n) + '…' : x
 }
 
 /** 在 decision.messages 最后一条真实 user 消息之后插入注入（前置位语义，继承 v0.2）。 */
@@ -110,8 +118,29 @@ export function panelBody(sid, s, stack) {
   }
 }
 
+/** 注入幂等决策（v0.3.1 提取为可测纯函数）：键=残差读数本身，同键不重注。 */
+export function faceDecision(s, top) {
+  const key = 'face:' + ((s && s.closed && s.closed.length) || 0) + ':' + (top ? top.n + top.status : 'idle')
+  return { key, inject: !(s && s.injected && s.injected.has(key)) }
+}
+
+/** autoConfirm 读取（用户授权通道：settings.autoConfirm——授权凭据写入设置文件 provenance 字段） */
+function readAutoConfirm() {
+  try {
+    const f = join(stateDirFor(), '..', 'graded-settings.json')
+    return JSON.parse(readFileSync(f, 'utf8')).autoConfirm === true
+  } catch { return false }
+}
+
 export function apply(ctx, config) {
   let activeSid = null
+  const offArmed = new Map() // off 双确认窗口（v0.3.1⑥：单条命令误触不清账）
+  function backupPersisted(sid) {
+    try {
+      const f = stateFileFor(sid)
+      if (existsSync(f)) writeFileSync(f.replace(/\.closedloop\.json$/, '') + '.closedloop.bak-' + Date.now() + '.json', readFileSync(f))
+    } catch { /* 备份失败不阻断 */ }
+  }
   const state = (sid) => loadState(sid) || initMode()
   const setState = (sid, s) => saveState(sid, s)
 
@@ -205,9 +234,44 @@ export function apply(ctx, config) {
 
   /* ---------- 工具注册（十一名全局常驻；execute 磁盘权威） ---------- */
 
+  const deps = {
+    getState: state,
+    setState,
+    // v0.3.2 确认=结构化弹窗：多选 + 补充文本同交；无 UI 通道时回退文本/autoConfirm
+    // Bug（session 06dcbf00 turn 4）: subagent 调用 askUser → runtime 抛 CALLER_NOT_LIVE
+    // 修复：调用前检查 agent.session——subagent 直接走文本回退，不触发 runtime 异常
+    async askUser(agent, s) {
+      // CALLER_NOT_LIVE 硬验：subagent/DELEGATED 不出弹窗，直接回退
+      if (!agent || agent.session?.id === undefined) {
+        return { answers: [], error: 'CALLER_NOT_LIVE（无活跃会话）' }
+      }
+      try {
+        return await ctx.userQuestions.ask({
+          questions: [{
+            id: 'closedloop-contract-review',
+            question: `合同已锁：Q_N×${(s.cost?.assertions || []).length}·组×${(s.groups || []).length}·非目标×${(s.cost?.nonGoals || []).length}。确认开快环，还是反驳重排？（可点选并在补充框写具体意见）`,
+            header: '闭环合同评审',
+            detail: [weightsFace(s ? controlSurface(s) : {}), treeText(s)].join('\n'),
+            options: [
+              { label: '确认·开快环', description: '按此权重进入每步实时定序' },
+              { label: '反驳·解锁重排', description: '回标定态改权重/组结构，已闭账不丢' },
+            ],
+            multi_select: true,
+            intent: { kind: 'plan-review', approve: '确认·开快环' },
+          }],
+          agent,
+        })
+      } catch (e) {
+        const msg = String(e?.message || e)
+        console.warn('[closedloop] askUser failed（回退文本/autoConfirm 通道）:', msg)
+        return { answers: [], error: msg }
+      }
+    },
+  }
+
   ctx.effect(() => {
     const disposers = []
-    const defs = [costSetDefinition(), decomposeDefinition(), freezeDefinition(), optimalDeclareDefinition(), optimalConvergeDefinition(), auditRecordDefinition('audit_record'), auditRecordDefinition('cost_audit'), optimalRollbackDefinition(), optimalStackDefinition(), reviseDoDefinition(), terminalCheckDefinition()]
+    const defs = [costSetDefinition(), decomposeDefinition(), freezeDefinition(deps), optimalDeclareDefinition(), optimalConvergeDefinition(), auditRecordDefinition('audit_record'), auditRecordDefinition('cost_audit'), optimalRollbackDefinition(), optimalStackDefinition(), reviseDoDefinition(), terminalCheckDefinition()]
     const got = defs.map((d) => d.name)
     if (got.join(',') !== TOOL_NAMES.join(',')) console.warn('[closedloop] 注册清单与 TOOL_NAMES 漂移:', got.join(','))
     for (const def of defs) {
@@ -232,9 +296,19 @@ export function apply(ctx, config) {
       const raw = String(invocation.rawInput || '').trim()
       const first = raw.split(/\s+/)[0] || ''
       if (first === 'off') {
+        const cur = state(sid)
+        if (cur.stage === 'off') return { kind: 'success', text: '已是关闭态（零副作用）。' }
+        if (!offArmed.has(sid)) {
+          offArmed.set(sid, Date.now())
+          console.log(`[closedloop] OFF armed sid=${String(sid).slice(-8)} stage=${cur.stage}（v0.3.1⑥双确认，10s 窗口）`)
+          return { kind: 'success', text: `⚠ 关闭将清状态面（当前 stage=${cur.stage}；V 账本栈保留，状态面自动备份）。确认请 10 秒内再发一次 /optimal off。` }
+        }
+        offArmed.delete(sid)
+        backupPersisted(sid)
         setState(sid, deactivate()); clearPersisted(sid)
+        console.log(`[closedloop] OFF executed sid=${String(sid).slice(-8)} via=command（已备份）`)
         try { agent.followup(userMsg(offReceipt())) } catch { /* 不阻断 */ }
-        return { kind: 'success', text: `闭环协议已关闭（v${VERSION}）。V 账本保留。` }
+        return { kind: 'success', text: `闭环协议已关闭（v${VERSION}）。V 账本保留，状态面已备份可恢复。` }
       }
       if (first === 'status') {
         const s = state(sid)
@@ -242,7 +316,8 @@ export function apply(ctx, config) {
       }
       const task = raw.replace(/^(?:[\\/|@])?(?:optimal|graded|分级)\s*[:：]?\s*/, '').trim()
       setState(sid, trigger(state(sid), task))
-      try { agent.followup(userMsg('【闭环·标定】cost_set 定 Q_N（断言逐条 text/severity/source，nonGoals 确认制）——权重合同先于一切。')) } catch { /* 不阻断 */ }
+      const taskHint = task.length > 0 ? `\n任务：${task}` : ''
+      try { agent.followup(userMsg('【闭环·标定】cost_set 定 Q_N（断言逐条 text/severity/source，nonGoals 确认制）——权重合同先于一切。' + taskHint)) } catch { /* 不阻断 */ }
       return { kind: 'success', text: `闭环协议触发（v${VERSION}）：标定→组冻结→确认→快环每步实时定序。任务：${task.slice(0, 60)}` }
     },
   })
@@ -268,29 +343,45 @@ export function apply(ctx, config) {
       activeSid = sid
       let s = state(sid)
       let task = null
-      for (const m of messages || []) {
+      // v0.3.1 幻影 off 真凶修复：只评估最近一条真实用户消息（旧版全史扫描——命令回显永久滞留，
+      // 每步重扫到就重执行 off，两次清账皆源于此）；off 双确认与命令通道同闸
+      for (let i = (messages || []).length - 1; i >= 0; i--) {
+        const m = messages[i]
+        if (!m || m.role !== 'user' || (m.source && m.source.kind === 'plugin')) continue
         let txt = ''
-        for (const x of (m?.content || [])) if (x?.type === 'text') txt += x.text || ''
-        const hit = txt.match(/^(?:[\\/@])(?:optimal|graded|分级)\s*[:：]?\s*(.+)/s) // 正/反斜杠 & @ & 中英触发；graded 保留兼容别名
+        if (typeof m.content === 'string') txt = m.content
+        else for (const x of (m?.content || [])) if (x && typeof x === 'object' && x.type === 'text') txt += x.text || ''
+        const hit = txt.match(/^(?:[\\/@])(?:optimal|graded|分级)\s*[:：]?\s*(.+)/s) // 正/反斜杠 & @ & 中英触发；graded 兼容别名
         if (hit) {
           const arg = hit[1].trim()
-          if (arg === 'off') { setState(sid, deactivate()); clearPersisted(sid); offJustNow = true }
-          if (s.stage === 'off') { task = arg; break }
+          if (arg === 'off') {
+            if (offArmed.has(sid) && Date.now() - offArmed.get(sid) < 10000) {
+              offArmed.delete(sid); backupPersisted(sid)
+              setState(sid, deactivate()); clearPersisted(sid); offJustNow = true
+              console.log(`[closedloop] OFF executed sid=${String(sid).slice(-8)} via=text（已备份）`)
+            } else {
+              offArmed.set(sid, Date.now())
+              console.log(`[closedloop] OFF armed sid=${String(sid).slice(-8)} via=text（双确认窗口）`)
+            }
+          } else if (s.stage === 'off') { task = arg }
         }
+        break
       }
       if (task !== null) setState(sid, trigger(state(sid), task))
       // 全段可逆扫描（v0.2 缺陷修复：不只 review 段）——weights 与 rolling 都接确认/修改
       const st = state(sid)
-      if (st.stage === 'weights' || st.stage === 'rolling') {
+      if (st.stage === 'weights' || st.stage === 'rolling' || st.stage === 'final') {
         for (let i = (messages || []).length - 1; i >= 0; i--) {
           const m = messages[i]
           if (!m || m.role !== 'user' || (m.source && m.source.kind === 'plugin')) continue
           let txt2 = ''
-          for (const x of (m?.content || [])) if (x?.type === 'text') txt2 += x.text || ''
+          if (typeof m.content === 'string') txt2 = m.content
+          else for (const x of (m?.content || [])) if (x && typeof x === 'object' && x.type === 'text') txt2 += x.text || ''
           const t = txt2.trim()
-          if (!t || t.length > 200) break // 长任务文本非翻转意图
-          const intent = scanIntent(t)
-          if (intent === 'reject') {
+          const intent = (!t || t.length > 200) ? null : scanIntent(t)
+          // scanLog：扫描看见了什么落盘可查（v0.3.1④——「继续」不翻转这类问题从猜测变成读账）
+          setState(sid, { ...state(sid), scanLog: { at: Date.now(), len: t.length, intent, stage: st.stage, head: t.slice(0, 24) } })
+          if (intent === 'reject' && st.stage !== 'final') {
             setState(sid, onWeightsUnlock(state(sid)))
             console.log('[closedloop] weights/rolling unlocked by text (a2)')
           } else if (intent === 'approve' && st.stage === 'weights') {
@@ -299,6 +390,11 @@ export function apply(ctx, config) {
           }
           break
         }
+      }
+      // autoConfirm（v0.3.1 用户授权「完全自主」通道）：weights 段 + settings.autoConfirm=true → 自动确认留痕
+      if (state(sid).stage === 'weights' && readAutoConfirm()) {
+        setState(sid, { ...onWeightsConfirmed(state(sid)), scanLog: { at: Date.now(), intent: 'autoConfirm', stage: 'weights', head: 'settings.autoConfirm' } })
+        console.log('[closedloop] auto-confirmed（provenance=settings.autoConfirm，用户授权 2026-09-04「跳过确认环节完全自主」）')
       }
     }
     const decision = await next()
@@ -315,12 +411,13 @@ export function apply(ctx, config) {
         s.injected.add('weights-review')
         spliceInjection(decision, userMsg(weightsFace(controlSurface(s)) + '\n（回复『确认』开快环；『修改』解锁重排）'))
       }
-      // rolling 最小状态面：幂等键=残差读数本身（closedCount+栈顶态变化才重注——无讲课件）
+      // rolling 最小状态面：幂等键=残差读数本身（faceDecision 纯函数可测；标记落盘=持久）
       if (s.stage === 'rolling') {
         const top = stackTop(loadStack(sid2))
-        const fKey = 'face:' + s.closed.length + ':' + (top ? top.n + top.status : 'idle')
-        if (!s.injected.has(fKey)) {
-          s.injected.add(fKey)
+        const fd = faceDecision(s, top)
+        if (fd.inject) {
+          s.injected.add(fd.key)
+          console.log(`[closedloop] face inject ${fd.key} sid=${String(sid2).slice(-8)} markers=${s.injected.size}`)
           spliceInjection(decision, userMsg(stateFace(controlSurface(s))))
         }
         // 写闸/回滚义务：一行短句（条款在引擎拒绝文本，不复读）
@@ -339,7 +436,11 @@ export function apply(ctx, config) {
         spliceInjection(decision, userMsg('【终端】terminal_check 归零（唯一 throw 位）。'))
       }
       if (s.stage !== 'off') saveState(sid2, s)
-    } catch { /* 注入失败不阻断 */ }
+    } catch (e) {
+      // v0.4-S1 修：注入失败不阻断——但**必须留痕**，否则这正是让"cut undefined 静默吃 saveState"等真 bug
+      // 长期隐身的面板（每步重注刷屏事件案底：session b74630b0，2026-09-04）。
+      console.warn('[closedloop] post-step inject failed（不应阻断，详情见下）:', e?.message || e)
+    }
     return decision
   })
 }

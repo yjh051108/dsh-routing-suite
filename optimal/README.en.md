@@ -1,4 +1,4 @@
-# optimal — Closed-Loop Protocol Plugin (dsh-closedloop-mode v0.3.0)
+# optimal — Closed-Loop Protocol Plugin (dsh-closedloop-mode v0.3.3)
 
 > **Rename & retirement note**: this folder was `graded/` (dsh-graded-mode, rc1 era, checklist paradigm) — now **retired**.
 > v0.2 replaced the paradigm (the state machine IS the control loop); v0.3 ships as **dsh-closedloop-mode**:
