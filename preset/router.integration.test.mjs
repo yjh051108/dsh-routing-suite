@@ -18,7 +18,7 @@
  */
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply as applyStandard } from './router-standard/router-bootstrap-v34.mjs' // v1.18.3：测试面=运行面（agent.cordis.yml 挂载 -v34）
@@ -428,6 +428,103 @@ function makeStageAgent(session, appends) {
     ctx: { get() { return { restrict(cfg) { restrictCalls.push(cfg) } } } },
     _restrictCalls: restrictCalls,
   }
+}
+
+for (const registryShape of ['has', 'get', 'data.has']) {
+  test(`stage unlock preserves own-scope shadows and fills missing tools (${registryShape})`, async (t) => {
+    const dir = mkdtempSync(join(tmpdir(), 'router-shadow-'))
+    const previousHome = process.env.DSH_HOME
+    const previousStageFile = process.env.DSH_ROUTER_STAGE_FILE
+    process.env.DSH_HOME = dir
+    process.env.DSH_ROUTER_STAGE_FILE = join(dir, 'stages.json')
+    t.after(() => {
+      if (previousHome === undefined) delete process.env.DSH_HOME
+      else process.env.DSH_HOME = previousHome
+      if (previousStageFile === undefined) delete process.env.DSH_ROUTER_STAGE_FILE
+      else process.env.DSH_ROUTER_STAGE_FILE = previousStageFile
+      rmSync(dir, { recursive: true, force: true })
+    })
+
+    const h = makeHarness(applyStandard, {})
+    const session = makeSession()
+    const shadows = ['edit', 'write', 'bash', 'pwsh'].map((name) => ({
+      name,
+      description: `Plugin ${name}`,
+      parameters: name === 'edit'
+        ? { type: 'object', properties: { path: { type: 'string' }, edits: { type: 'array', items: { type: 'string' } } }, required: ['path', 'edits'] }
+        : { type: 'object', properties: { custom_input: { type: 'string' } }, required: ['custom_input'] },
+      execute: async (args) => ({ plugin: name, args }),
+    }))
+    const originalSchemas = shadows.map((def) => structuredClone(def.parameters))
+    const own = new Map(shadows.map((def) => [def.name, def]))
+    const deletions = []
+    // Expose only one lookup interface; retain data.delete to reproduce #92.
+    const ownRegistry = { data: { delete(name) { deletions.push(name); return own.delete(name) } } }
+    if (registryShape === 'data.has') ownRegistry.data.has = (name) => own.has(name)
+    else ownRegistry[registryShape] = (name) => own[registryShape](name)
+    const hostTool = (name) => ({ name, description: `Host ${name}`, parameters: { type: 'object' }, execute: async () => `host:${name}` })
+    const mount = new Map(['edit', 'write', 'bash', 'pwsh', 'str_replace_editor'].map((name) => [name, hostTool(name)]))
+    const parent = new Map(['str_replace_editor', 'read_image'].map((name) => [name, hostTool(name)]))
+    const registrations = []
+    const restrictions = []
+    let releases = 0
+    const toolsSvc = {
+      layers: {
+        scoped: new Map(),
+        chainLayers(scope) {
+          if (scope === agent) return [{ tools: mount }]
+          if (scope === agent.ctx) return [{ tools: { entries: () => parent.entries() } }]
+          return []
+        },
+      },
+      register(def) {
+        registrations.push(def.name)
+        if (own.has(def.name)) throw new Error(`Duplicate tool: ${def.name}`)
+        own.set(def.name, def)
+      },
+      schemas: () => [...own.values()],
+      restrict(config) { restrictions.push(config); return () => { releases += 1 } },
+    }
+    const agent = { session, ctx: { get: (name) => name === 'tools' ? toolsSvc : undefined } }
+    toolsSvc.layers.scoped.set(agent, { tools: ownRegistry })
+    h.agentRef.current = agent
+    await h.assemble(baseAssembled(), { agent, scope: agent })
+    await h.registeredTools.find((def) => def.name === 'phase_begin').execute()
+
+    // Exercise automatic advancement through the actual pre-step handler.
+    for (const stage of [1, 2]) {
+      session.events.push({ type: 'tool/call', data: { name: 'todo_write' } })
+      await h.preStep({ agent, messages: [], turn: stage, step: 1 })
+      assert.equal(JSON.parse(readFileSync(process.env.DSH_ROUTER_STAGE_FILE, 'utf8')).sessions[session.id].stage, stage)
+      for (const [index, def] of shadows.entries()) {
+        assert.strictEqual(own.get(def.name), def, `${def.name} definition survives stage ${stage}`)
+        assert.strictEqual(own.get(def.name).parameters, def.parameters)
+        assert.deepEqual(own.get(def.name).parameters, originalSchemas[index])
+      }
+      assert.equal(own.has('str_replace_editor'), stage === 2, 'missing development tool unlocks only at stage 2')
+      assert.equal(own.has('read_image'), false, 'missing verification tool stays locked')
+    }
+    const args = { path: 'example.txt', edits: ['1#HASH|updated'] }
+    assert.deepEqual(await own.get('edit').execute(args), { plugin: 'edit', args })
+    assert.strictEqual(own.get('str_replace_editor'), mount.get('str_replace_editor'))
+
+    // The own-layer meta tool still advances and reinstalls shims at stage 3.
+    assert.match(await own.get('phase_advance').execute({ reason: 'self-check passed' }), /advanced to phase 3/)
+    assert.strictEqual(own.get('read_image'), parent.get('read_image'), 'missing tool resolves through the context scope and entries fallback')
+    assert.equal(await own.get('read_image').execute(), 'host:read_image')
+    for (const def of shadows) {
+      assert.strictEqual(own.get(def.name), def, `${def.name} survives verification too`)
+      assert.ok(!deletions.includes(def.name), `${def.name} is never deleted`)
+      assert.ok(!registrations.includes(def.name), `${def.name} is never re-registered`)
+    }
+    assert.equal(registrations.filter((name) => name === 'str_replace_editor').length, 1, 'unlocked tool is not replaced by later layers or stages')
+    assert.equal(registrations.filter((name) => name === 'read_image').length, 1)
+    assert.equal(restrictions.length, 3, 'stages 0/1/2 install restrictions')
+    assert.ok(!restrictions[1].allow.includes('str_replace_editor'))
+    assert.ok(restrictions[2].allow.includes('str_replace_editor'))
+    assert.equal(releases, 3, 'stage 3 releases the last restriction')
+    assert.match(await own.get('dev_router_status').execute(), /\(3\/3\)/)
+  })
 }
 
 test('v1.19: completion signals drive the phase ladder; tool names do not', async () => {

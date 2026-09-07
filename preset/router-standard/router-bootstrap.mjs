@@ -1212,8 +1212,15 @@ export function apply(ctx, config) {
             try { for (const [nn, dd] of lt.entries()) if (nn === name) { def = dd; break } } catch { /* ignore */ }
           }
           if (def) {
+            // Stage unlock only fills gaps; preserve plugins' own-scope shadows.
             try {
-              try { toolsSvc?.layers?.scoped?.get?.(agent)?.tools?.data?.delete?.(name) } catch { /* ignore */ }
+              const own = toolsSvc?.layers?.scoped?.get?.(agent)?.tools
+              const hasOwn = typeof own?.has === 'function' ? own.has(name)
+                : typeof own?.get === 'function' ? !!own.get(name)
+                  : (own?.data?.has?.(name) ?? false)
+              if (hasOwn) { seen.add(name); continue }
+            } catch { /* own-layer lookup unavailable */ }
+            try {
               toolsSvc.register(def); n += 1; seen.add(name)
             } catch { /* duplicate/无效 */ }
           }
