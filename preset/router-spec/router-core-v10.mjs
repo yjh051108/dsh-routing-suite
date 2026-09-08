@@ -158,13 +158,17 @@ export function classifyTask(text) {
  * user-origin message exists.
  */
 export function sessionMode(session) {
-  const events = session.events || (typeof session.snapshotEvents === 'function' ? session.snapshotEvents() : [])
+  const events = sessionEvents(session)
   const userMsg = events.find((e) => e.type === 'user/message' && (e.data?.source?.kind === 'user' || e.data?.source?.kind === undefined))
     ?? events.find((e) => e.type === 'user/message')
   return classifyTask(extractText(userMsg?.data))
 }
 
-// 新增辅助（router-core）：
+/**
+ * Durable events of a session: current hosts expose `snapshotEvents()`
+ * (handle-based seam) instead of a `.events` array; fall back to the legacy
+ * property for older hosts. Returns [] when neither is available.
+ */
 export function sessionEvents(session) {
   if (!session) return []
   if (Array.isArray(session.events)) return session.events

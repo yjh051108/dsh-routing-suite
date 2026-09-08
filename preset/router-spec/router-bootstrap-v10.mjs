@@ -29,7 +29,7 @@
 
 import {
   applyPersona, bandFor, bandOf, coreFor, parseMode, personaFor, sessionMode, testinessFor, clamp01,
-  classifyTask, extractText, isComplexTask, sessionEvents
+  classifyTask, extractText, isComplexTask, sessionEvents,
 } from './router-core-v10.mjs'
 
 /** Cordis plugin name used by loader diagnostics. */

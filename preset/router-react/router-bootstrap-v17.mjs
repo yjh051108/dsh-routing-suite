@@ -21,7 +21,7 @@
 
 import {
   applyPersona, bandFor, bandOf, coreFor, parseMode, personaFor, sessionMode, testinessFor, clamp01,
-  isComplexTask,
+  isComplexTask, sessionEvents,
 } from './router-core-v17.mjs'
 
 /** Cordis plugin name used by loader diagnostics. */
@@ -117,7 +117,7 @@ export function apply(ctx, config) {
       core = new Set(legacyCore(mode))
     }
 
-    if (session.events.some((event) => event.type === 'tool/call')) {
+    if (sessionEvents(session).some((event) => event.type === 'tool/call')) {
       return { ...assembled, sections, contexts: [] } // promoted: full catalog
     }
 
