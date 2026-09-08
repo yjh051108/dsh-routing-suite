@@ -23,19 +23,31 @@ const P = path.join(REQ, 'preset')         // preset/preset 源码根
 // DSH_HOME = dsh 的 .dsh 根目录。
 // 注意坑（本部署实测）：user shell 的 HOME/USERPROFILE 是 Administrator，
 // 但真实 profile/agent-presets 在 Eldwen 用户下（dsh 进程 homedir=Administrator 却吃到 Eldwen）。
-// 所以：优先用 DSH_HOME 环境变量（dsh 启动器真实设置值），否则显式落到 Eldwen，
-// 绝不跟 USERPROFILE/HOME 走。
-const DSH_HOME = process.env.DSH_HOME || 'C:\\Users\\Eldwen'
+// 所以：优先用 DSH_HOME 环境变量（dsh 启动器真实设置值）；否则用当前用户的
+// 主目录（os.homedir()），绝不硬编码某个用户名——不同机器/不同账户都能跑。
+const DSH_HOME = process.env.DSH_HOME || require('node:os').homedir()
 const AGENT = path.join(DSH_HOME, '.dsh', '.agent-presets')
 
-// 三大预设：源码目录名 + 运行目录名 + 目标版本（从源码 agent.cordis.yml 反推）
+// 三大预设：源码目录名 + 运行目录候选名 + 目标版本（从源码 agent.cordis.yml 反推）
+// runCandidates 按顺序探测：历史部署把 router-standard 的运行目录命名为
+// `router-standard-v22`（内容其实是 v34），新部署直接叫 `router-standard`。
+// 硬编码单一名字会让另一类部署直接报「运行目录不存在」。
 const PRESETS = {
-  'router-standard': { src: 'router-standard', run: 'router-standard-v22' },
-  'router-react':    { src: 'router-react',    run: 'router-react' },
-  'router-spec':     { src: 'router-spec',     run: 'router-spec' },
+  'router-standard': { src: 'router-standard', runCandidates: ['router-standard-v22', 'router-standard'] },
+  'router-react':    { src: 'router-react',    runCandidates: ['router-react'] },
+  'router-spec':     { src: 'router-spec',     runCandidates: ['router-spec'] },
 }
 
 function die(msg) { console.error('[sync-preset] ' + msg); process.exit(1) }
+
+/** 第一个存在的运行目录；都不存在时返回 null（调用方给出候选清单）。 */
+function resolveRunDir(candidates) {
+  for (const name of candidates) {
+    const dir = path.join(AGENT, name)
+    if (fs.existsSync(dir)) return { name, dir }
+  }
+  return null
+}
 
 function readTargetVersion(srcDir) {
   // 从源码 agent.cordis.yml 的 bootstrap 行提取 -vN
@@ -64,14 +76,16 @@ function syncPreset(name, doBump) {
   if (!p) die('未知预设: ' + name + '（可选 ' + Object.keys(PRESETS).join(' | ') + '）')
 
   const srcDir = path.join(P, p.src)
-  const runDir = path.join(AGENT, p.run)
+  const run = resolveRunDir(p.runCandidates)
   if (!fs.existsSync(srcDir)) die('源码目录不存在: ' + srcDir)
-  if (!fs.existsSync(runDir)) die('运行目录不存在: ' + runDir)
+  if (run === null) die(`运行目录不存在: 候选 ${p.runCandidates.join(' | ')}（在 ${AGENT} 下都没找到）`)
+  const runDir = run.dir
+  const runName = run.name
 
   const t = readTargetVersion(srcDir)
   if (!t) die('源码 agent.cordis.yml 未找到 router-bootstrap-vN.mjs 引用')
 
-  console.log(`\n== 同步 ${name} → ${p.run} (${t.ver}) ==`)
+  console.log(`\n== 同步 ${name} → ${runName} (${t.ver}) ==`)
 
   // 1. 生成带版本号 bootstrap（替换 core import 为版本号）。
   // v1.20 同步修复：写回「源码目录」的 -vN.mjs 作为镜像（selftest/router.test 读源码 -vN.mjs）。
@@ -95,7 +109,11 @@ function syncPreset(name, doBump) {
   const core = fs.readFileSync(path.join(srcDir, 'router-core.mjs'), 'utf8')
   fs.writeFileSync(path.join(runDir, `router-core-${t.ver}.mjs`), core)
   fs.writeFileSync(path.join(srcDir, `router-core-${t.ver}.mjs`), core)
-  console.log(`  复制 core/agent.cordis.yml/preset.yml/gitbash/selftest → ${p.run}`)
+  // 无版本别名必须与 -vN 同步：运行目录的 agent.cordis.yml 常直接引用
+  // router-core.mjs / router-bootstrap.mjs（无版本戳），别名漂移会让线上跑旧代码。
+  fs.writeFileSync(path.join(runDir, 'router-core.mjs'), core)
+  fs.writeFileSync(path.join(runDir, 'router-bootstrap.mjs'), bootV)
+  console.log(`  复制 core/agent.cordis.yml/preset.yml/gitbash/selftest → ${runName}`)
 
   // 3. 确认运行目录 agent.cordis.yml 指向 -vN（若不一致则修正）
   let cfg = fs.readFileSync(path.join(runDir, 'agent.cordis.yml'), 'utf8')
@@ -121,7 +139,7 @@ function syncPreset(name, doBump) {
   } else {
     console.log('  (无 selftest，跳过验证)')
   }
-  console.log(`== 完成 ${name} → ${p.run} (${t.ver}) ==`)
+  console.log(`== 完成 ${name} → ${runName} (${t.ver}) ==`)
 }
 
 const [name, flag] = process.argv.slice(2)
