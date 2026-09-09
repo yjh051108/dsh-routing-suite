@@ -593,7 +593,7 @@ function applyStageRestrict(agent, stage) {
 }
 
 export function apply(ctx, config) {
-  try { mkdirSync(join(process.env.DSH_HOME || homedir(), 'router-standard'), { recursive: true }); writeFileSync(join(process.env.DSH_HOME || homedir(), 'router-standard', 'last-mount.txt'), 'new-gen v0.8 ' + new Date().toISOString(), 'utf8') } catch { /* marker */ }
+  try { mkdirSync(join(dshHomeForState(), 'router-standard'), { recursive: true }); writeFileSync(join(dshHomeForState(), 'router-standard', 'last-mount.txt'), 'new-gen v0.8 ' + new Date().toISOString(), 'utf8') } catch { /* marker */ }
   // 运行环境修整：① node 进 PATH（harness 的 node 在自定义运行时目录，不在系统 PATH——v1.5 实测
   // "node not recognized" 的根因）；② Git bin 前置（让 git 在任何 shell 都可用；bash 工具在 win32
   // 已禁用——host 的 shell seam 在 win32 只提供 pwsh，此前 bash 行在 win32 实为 pwsh 语义）。
@@ -609,7 +609,7 @@ export function apply(ctx, config) {
     // shell 解析诊断（v1.4.1→v1.5）：bash/node 实际解析到哪——事实文件，不再靠猜。
     try {
       const cands = fore.filter((e) => existsSync(join(e, process.platform === 'win32' ? 'bash.exe' : 'bash')))
-      writeFileSync(join(process.env.DSH_HOME || homedir(), 'router-standard', 'bash-diag.json'),
+      writeFileSync(join(dshHomeForState(), 'router-standard', 'bash-diag.json'),
         JSON.stringify({ at: new Date().toISOString(), win32: process.platform === 'win32', nodeDir, gitCandidates: cands, nodeOnPath: fore.some((e) => existsSync(join(e, 'node.exe'))) }, null, 2), 'utf8')
     } catch { /* 诊断失败不阻塞 */ }
   } catch { /* PATH 修整失败不阻塞 */ }
@@ -1092,7 +1092,7 @@ export function apply(ctx, config) {
         const targetSid2 = shimArgs?.targetSessionId || target2.session?.id || sid
         const before2 = ap2.composedPreset(target2.ctx) ?? 'unknown'
         if (before2 === 'unknown') return 'ERROR: 未加入预设'
-        const ymlFile2 = join(process.env.DSH_HOME || homedir(), '.agent-presets', before2, 'agent.cordis.yml')
+        const ymlFile2 = join(dshHomeForState(), '.agent-presets', before2, 'agent.cordis.yml')
         let yml2 = ''
         try { yml2 = readFileSync(ymlFile2, 'utf8') } catch (e) { return 'ERROR: 读取失败 ' + String(e) }
         const refRe2 = /(name: \.\/[A-Za-z0-9._-]+\.mjs)(\?v=\d+)?/g
@@ -1241,7 +1241,7 @@ export function apply(ctx, config) {
       if (!ap || !agent) return 'ERROR: agentPresets/agent 不可用 (target=' + label + ')'
       const before = ap.composedPreset(agent.ctx) ?? 'unknown'
       if (before === 'unknown') return 'ERROR: 当前 agent 未加入预设'
-      const home = process.env.DSH_HOME || homedir()
+      const home = dshHomeForState()
       const presetDir = join(home, '.agent-presets', before)
       const ymlFile = join(presetDir, 'agent.cordis.yml')
       let yml = ''

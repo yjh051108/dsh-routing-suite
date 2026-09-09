@@ -27,7 +27,9 @@ check('staged-sdk-called', src.includes('const staged = buildStagedSdk(sections,
 check('no-stageSection-leak', !src.includes('(stageSection?.text'))
 check('tools-catalog-registered', src.includes("    name: 'tools_catalog',"))
 check('tools-help-registered', src.includes("    name: 'tools_help',"))
-check('dsh-home-stage-file', src.includes("process.env.DSH_HOME || homedir()"))
+check('dsh-home-stage-file', src.includes("const dshHomeForState = () => process.env.DSH_HOME || join(homedir(), '.dsh')"))
+// 所有 dsh home 路径都必须经过 dshHomeForState()：裸 homedir() 缺少 /.dsh 段（#100）
+check('dsh-home-no-bare-homedir', !src.includes("process.env.DSH_HOME || homedir()"))
 
 // 3. 配置指向新一代（?v= 预期递增）
 check('config-points-v34', /router-bootstrap-v34\.mjs\?v=\d+/.test(cfg))
