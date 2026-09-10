@@ -1163,7 +1163,18 @@ export function apply(ctx, config) {
           if (args.action === 'blocked' && authority.kind === 'goal-round' && authority.goal.roundsStarted < 3) throw new Error('blocked requires at least 3 consecutive goal rounds')
           const goal = args.action === 'complete' ? goalsSvc.complete(execution.agent, ref) : goalsSvc.block(execution.agent, ref, { code: 'model-reported', message: String(args.blocked_reason || '') })
           if (authority.kind === 'goal-round' && exec && typeof exec.deferContext === 'function') {
-            exec.deferContext({ role: 'user', source: { kind: 'plugin', plugin: 'tool-goal', form: 'notice' }, content: [{ type: 'text', text: args.action === 'complete' ? '<goal_complete>' : '<goal_blocked>' }] })
+            // Must carry `id` and, for form 'notice', a string `summary`: the released
+            // session-format validator requires both, and a message without them makes the
+            // whole durable log unmigratable (v2 -> v3 refuses it on reopen).
+            const action = args.action === 'complete' ? 'complete' : 'blocked'
+            const objective = String(goal?.objective ?? '')
+            const summary = `${action}: ${objective}`
+            exec.deferContext({
+              id: 'goal-notice-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+              role: 'user',
+              source: { kind: 'plugin', plugin: 'tool-goal', form: 'notice', summary: summary.length <= 120 ? summary : summary.slice(0, 119) + '…' },
+              content: [{ type: 'text', text: args.action === 'complete' ? '<goal_complete>' : '<goal_blocked>' }],
+            })
           }
           return JSON.stringify(goalsValue(goal))
         }
