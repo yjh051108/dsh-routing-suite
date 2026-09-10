@@ -1,5 +1,25 @@
 # Changelog
 
+## fix — preset 契约修复与卡口（persona 行 text → prefix）
+
+三份 preset（router-standard / router-spec / router-react）的 persona 行写的是 `text:`。
+`@deepseek-ai/dsh-persona` 的 schema 已把该字段改名为**必填** `prefix`，于是三份 preset
+都在挂载期失败，用户侧表现为选择器报「无法切换到 <preset>」：
+
+```
+failed to apply loader entry persona (@deepseek-ai/dsh-persona): invalid config:
+  - $.prefix missing required value
+```
+
+本版把三处改为 `prefix:`，并加上让这类回归不可能静默复发的卡口：
+
+- `preset-contract.test.mjs`——离线校验每份 `agent.cordis.yml` 的 persona 行；契约取自
+  **运行中部署**的 `dsh-persona`（不硬编码，且拒绝快照退化，dsh 升级改名时不会静默失效），
+  显式拒绝历史字段名；同时逐字节复核发行 tgz 内的 composition 与包内一致。
+- 发布前先跑 `node --test preset-contract.test.mjs`，任一项红就不要发。
+
+验证：`preset-contract` 3/3、`router.test` 26/26。
+
 ## v1.27.0 — 隔离与并行（注意力工程 · 支柱4）
 
 **支柱4 隔离与并行**：当两个独立关注点污染单线程、或一个子问题吞噬主线预算时，用 subagent/workflow
