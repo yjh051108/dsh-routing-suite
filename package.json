@@ -21,8 +21,17 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "injector/package.json",
     "injector/lib",
     "injector/scripts",
+    "preset/router-standard",
+    "preset/router-spec",
+    "preset/router-react",
+    "graded/package.json",
+    "graded/dsh.plugin.json",
+    "graded/cordis.patch.yml",
+    "graded/lib",
+    "graded/client",
     "cordis.patch.yml",
     "LICENSE",
     "README.md",

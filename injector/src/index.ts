@@ -27,7 +27,7 @@ import type SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import type ToolRegistry from '@deepseek-ai/dsh-tools'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import z from 'schemastery'
-import { readdirSync, statSync, readFileSync, writeFileSync, existsSync, mkdirSync, symlinkSync, rmdirSync, appendFileSync, renameSync, lstatSync, rmSync, readlinkSync, realpathSync } from 'node:fs'
+import { readdirSync, statSync, readFileSync, writeFileSync, existsSync, mkdirSync, symlinkSync, rmdirSync, appendFileSync, renameSync, lstatSync, rmSync, readlinkSync, realpathSync, cpSync } from 'node:fs'
 import { join, relative, dirname, resolve } from 'node:path'
 import { homedir } from 'node:os'
 import { spawnSync } from 'node:child_process'
@@ -501,6 +501,10 @@ export interface Config {
   profileNodeModules: string
   /** 启动时自动恢复清单中的注入。 */
   autoRestore: boolean
+  /** 三组件自装配：激活后把包内捆绑的 preset/ 复制到 $DSH_HOME/.agent-presets（仅缺失项，不覆盖）。 */
+  provisionPresets: boolean
+  /** 三组件自装配：激活后把包内捆绑的 graded/ 装配进 profile（link: 依赖 + bundles + junction + 热装配，幂等）。 */
+  provisionGraded: boolean
   /** 轮询间隔（ms）。构建产物整批写入，间隔轮询天然合并抖动。 */
   intervalMs: number
   /** 监听目录 → 缓存匹配子串（loadCache key 是 realpath，用目录名匹配）。 */
@@ -514,6 +518,8 @@ export const Config = z.object({
   registryFile: z.string().default(''),
   profileNodeModules: z.string().default(''),
   autoRestore: z.boolean().default(true),
+  provisionPresets: z.boolean().default(true),
+  provisionGraded: z.boolean().default(true),
   intervalMs: z.number().default(1500),
   watches: z.array(z.object({
     dir: z.string().required(),
@@ -3213,6 +3219,158 @@ export function apply(ctx: AppContext, config: Config): void {
     })
   } catch (e) {
     logger.warn('[super-injector] systemPrompt.context 重复注册容忍（跳过，新实例继续运行）: %s', e instanceof Error ? e.message : String(e))
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // 三组件自装配（一键安装补全）：`dsh plugin add github:...` 只会装配
+  // injector 本体（npm 按根 files 白名单打包）。激活后在这里补齐另外两件，
+  // 全部幂等、失败不阻塞 boot：
+  //  - preset/*  → $DSH_HOME/.agent-presets/（仅复制缺失项，永不覆盖用户改动）
+  //  - graded    → profile dependencies(link:) + bundles + junction + 热装配
+  //    （复用 dev_install_package 的装配路径，重启后由 bundles 正常接管）
+  // ═══════════════════════════════════════════════════════════════════
+  /** 定位套装根（同时含 preset/ 与 graded/ 的那一层）。源码 checkout：
+   * injector/src → injector → 根；打包安装：injector/lib → injector → 包根。
+   * 从编译产物位置向上探测（最多 4 层），命中捆绑预设即返回。 */
+  function findSuiteRoot(): string | null {
+    let dir = dirname(fileURLToPath(import.meta.url))
+    for (let i = 0; i < 4; i++) {
+      dir = dirname(dir)
+      if (existsSync(join(dir, 'preset', 'router-standard', 'preset.yml'))) return dir
+    }
+    return null
+  }
+
+  function provisionPresets(suiteRoot: string): string[] {
+    const presetRoot = join(suiteRoot, 'preset')
+    const targetRoot = join(dshHome, '.agent-presets')
+    let names: string[]
+    try {
+      names = readdirSync(presetRoot, { withFileTypes: true })
+        .filter((e) => e.isDirectory() && existsSync(join(presetRoot, e.name, 'preset.yml')))
+        .map((e) => e.name)
+    } catch (e) {
+      return [`presets: 捆绑预设目录不可读（跳过）: ${String(e)}`]
+    }
+    const notes: string[] = []
+    for (const name of names) {
+      const target = join(targetRoot, name)
+      if (existsSync(join(target, 'preset.yml'))) continue // 已有：不覆盖用户改动
+      try {
+        mkdirSync(targetRoot, { recursive: true })
+        cpSync(join(presetRoot, name), target, { recursive: true })
+        notes.push(`preset ${name} 已装配 → ${target}`)
+      } catch (e) {
+        notes.push(`preset ${name} 装配失败: ${String(e)}`)
+      }
+    }
+    return notes
+  }
+
+  async function provisionGraded(suiteRoot: string): Promise<string[]> {
+    const notes: string[] = []
+    const gradedDir = join(suiteRoot, 'graded')
+    const pkgPath = join(gradedDir, 'package.json')
+    if (!existsSync(pkgPath)) return ['graded: 包内无捆绑（跳过）']
+    let pkgName = ''
+    try {
+      pkgName = String(JSON.parse(readFileSync(pkgPath, 'utf8')).name ?? '')
+    } catch {
+      return ['graded: package.json 解析失败（跳过）']
+    }
+    if (!pkgName) return ['graded: package.json 缺 name（跳过）']
+
+    const profileDir = dirname(profileNodeModules)
+    const profilePkgPath = join(profileDir, 'package.json')
+    if (!existsSync(profilePkgPath)) return ['graded: profile package.json 不存在（跳过）']
+
+    // profile package.json（dependencies link: + bundles，幂等）：重启后由
+    // bundles 正常接管——与 dev_install_package 双路径一致。
+    try {
+      const profilePkg = JSON.parse(readFileSync(profilePkgPath, 'utf8'))
+      profilePkg.dependencies = profilePkg.dependencies ?? {}
+      profilePkg.dsh = profilePkg.dsh ?? {}
+      profilePkg.dsh.profile = profilePkg.dsh.profile ?? {}
+      profilePkg.dsh.profile.bundles = profilePkg.dsh.profile.bundles ?? []
+      const steps: string[] = []
+      if (!profilePkg.dependencies[pkgName]) {
+        profilePkg.dependencies[pkgName] = 'link:' + gradedDir
+        steps.push(`dependencies += ${pkgName}`)
+      }
+      if (!profilePkg.dsh.profile.bundles.includes(pkgName)) {
+        profilePkg.dsh.profile.bundles.push(pkgName)
+        steps.push(`bundles += ${pkgName}`)
+      }
+      if (steps.length) {
+        writeFileSync(profilePkgPath, JSON.stringify(profilePkg, null, 2) + '\n', 'utf8')
+        notes.push(`graded: profile package.json 已更新（${steps.join(', ')}）`)
+      }
+    } catch (e) {
+      return [...notes, `graded: profile package.json 更新失败: ${String(e)}`]
+    }
+
+    // node_modules junction（@scope/name 两级；悬空链接重建，lstat 判链接本体）
+    const parts = pkgName.startsWith('@') ? pkgName.split('/') : [pkgName]
+    const linkPath = join(profileNodeModules, ...parts)
+    try {
+      let linkOk = false
+      try { linkOk = existsSync(join(linkPath, 'package.json')) } catch { /* 悬空 */ }
+      if (!linkOk) {
+        try { rmSync(linkPath, { recursive: true, force: true }) } catch { /* 覆盖重建 */ }
+        mkdirSync(dirname(linkPath), { recursive: true })
+        symlinkSync(gradedDir, linkPath, 'junction')
+        notes.push(`graded: junction 已建立 → ${linkPath}`)
+      }
+    } catch (e) {
+      return [...notes, `graded: junction 失败: ${String(e)}`]
+    }
+
+    // loader 热装配（幂等：entry 已存在则跳过）
+    try {
+      let exists = false
+      for (const entry of ctx.loader.entries()) {
+        const opts = (entry as { options?: { name?: string } }).options
+        if (opts?.name === pkgName) { exists = true; break }
+      }
+      if (!exists) {
+        await ctx.loader.create({ name: pkgName, config: {} })
+        notes.push('graded: loader.create 已热装配（免重启生效）')
+      } else {
+        notes.push('graded: loader entry 已存在（跳过）')
+      }
+      normalizeEntriesByName(pkgName)
+      refreshClientRow(pkgName)
+    } catch (e) {
+      notes.push(`graded: 热装配失败（重启后由 bundles 接管）: ${String(e)}`)
+    }
+    return notes
+  }
+
+  if (config.provisionPresets || config.provisionGraded) {
+    // 延迟执行：等 boot 尘埃落定（watch/autoRestore 之后）再补装，异步不阻塞装配
+    globalThis.setTimeout(() => {
+      void (async () => {
+        try {
+          const suiteRoot = findSuiteRoot()
+          if (!suiteRoot) {
+            auditLog('provision-skip', '未定位到套装根（preset/ 缺失）——本包可能是单独构建的 injector')
+            return
+          }
+          const notes: string[] = []
+          if (config.provisionPresets) notes.push(...provisionPresets(suiteRoot))
+          if (config.provisionGraded) notes.push(...await provisionGraded(suiteRoot))
+          if (notes.length) {
+            for (const n of notes) logger.info('[super-injector] 自装配: %s', n)
+            auditLog('provision-ok', notes.join(' | '))
+          } else {
+            auditLog('provision-clean', '三组件已齐（无需补装）')
+          }
+        } catch (e) {
+          auditLog('provision-failed', String(e))
+          logger.warn('[super-injector] 自装配失败（不影响运行）: %s', e instanceof Error ? e.message : String(e))
+        }
+      })()
+    }, 1500)
   }
 
   logger.info('[super-injector] 就绪：watch %d 目录（%dms），autoRestore=%s', watches.length, intervalMs, String(config.autoRestore))

@@ -31,6 +31,15 @@ dsh plugin --profile web add github:yjh051108/dsh-routing-suite
 > 本套装已含上述三组件（injector/preset/graded 均为仓库内普通目录，内容直接入库）；
 > graded 发布物：`graded/dsh-external-dsh-graded-mode-0.0.1-rc1.tgz`（或 Release 附件）。
 
+**一条命令装齐三组件**：上一步只装配 injector 本体（npm 按 `files` 白名单打包）；
+preset 与 graded 由注入器在**首次激活后自动补装**（约 1.5s 后执行，全部幂等）：
+
+- `preset/router-*` → 复制到 `$DSH_HOME/.agent-presets/`（仅缺失项，**永不覆盖**用户已改的预设）；
+- `graded/` → 写入 profile `dependencies`（`link:`）+ `bundles`、建 junction、`loader.create` 热装配（免重启生效，重启后由 bundles 正常接管）。
+
+可通过注入器配置关闭：`provisionPresets: false` / `provisionGraded: false`。
+装配结果见 `~/.dsh/super-injector/self-heal.log`（`provision-*` 事件）。
+
 **DSH Target**：`>=0.1.0-rc.6 <0.2.0`（已跟进 rc.8 / 0.1.1-rc.2 / 0.1.2-alpha.1）
 
 > DSH 目前处于 developer preview，官方明示会有破坏性变更（breaking changes）。
@@ -43,7 +52,7 @@ dsh plugin --profile web add github:yjh051108/dsh-routing-suite
 git clone https://github.com/yjh051108/dsh-routing-suite.git
 cd dsh-routing-suite
 
-# 2. 一键安装（注入器装配 + 预设复制 + 布局自检 + 提示重启）
+# 2. 一键安装（注入器装配 + 预设复制 + graded 装配 + 布局自检 + 提示重启）
 .\install.ps1
 ```
 
@@ -61,7 +70,10 @@ Copy-Item -Recurse .\preset\router-standard $target
 $target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-spec'
 Copy-Item -Recurse .\preset\router-spec $target
 
-# 步骤 3：重启 DSH → 新会话选择 Router Standard / Router Spec (experimental)
+# 步骤 3：安装 graded 分级模式（实验组件，仓库内预构建发布物；/分级 on 激活，不激活零痕迹）
+dsh plugin --profile web add .\graded\dsh-external-dsh-graded-mode-0.0.1-rc1.tgz
+
+# 步骤 4：重启 DSH → 新会话选择 Router Standard / Router Spec (experimental)
 ```
 
 > 注意：不要复制 `preset` 整目录（会多套一层，DSH 发现不了预设）。

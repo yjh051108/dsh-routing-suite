@@ -30,7 +30,7 @@ speced plan → check-in → group close-out → final check, with redteam gate 
 git clone https://github.com/yjh051108/dsh-routing-suite.git
 cd dsh-routing-suite
 
-# 2. One-shot install (injector assembly + preset copy + layout self-check + restart prompt)
+# 2. One-shot install (injector assembly + preset copy + graded install + layout self-check + restart prompt)
 .\install.ps1
 ```
 
@@ -49,7 +49,11 @@ Copy-Item -Recurse .\preset\router-standard $target
 $target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-spec'
 Copy-Item -Recurse .\preset\router-spec $target
 
-# Step 3: restart DSH → pick Router Standard / Router Spec in a new session
+# Step 3: install graded mode (experimental component; ships prebuilt in-repo;
+# activate with /分级 on — zero footprint while inactive)
+dsh plugin --profile web add .\graded\dsh-external-dsh-graded-mode-0.0.1-rc1.tgz
+
+# Step 4: restart DSH → pick Router Standard / Router Spec in a new session
 ```
 
 > Do NOT copy the `preset` directory as a whole — the extra nesting hides the
