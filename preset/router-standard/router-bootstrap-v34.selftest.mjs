@@ -29,6 +29,15 @@ check('tools-catalog-registered', src.includes("    name: 'tools_catalog',"))
 check('tools-help-registered', src.includes("    name: 'tools_help',"))
 check('dsh-home-stage-file', src.includes("process.env.DSH_HOME || homedir()"))
 
+// 2b. 委派会话（子代理）不得参与阶段门控
+// 实证（goal-898694）：prompt 侧已有 parentSession 判断，门控侧漏了它 → 子代理被新建一条起步为 0
+// 的阶段记录、自动推进到 1，执行工具中途被摘掉（bash 变 unknown tool，且无法自己上报）。
+// 四条判断必须同时在位：assemble（原有）+ pre-step + applyStageRestrict + installMetaShim。
+check('delegated-session-guards-all-sites', (src.match(/header\?\.parentSession !== undefined/g) || []).length >= 4)
+check('delegated-pre-step-guard', src.includes('if (agent.session.header?.parentSession !== undefined) return decision'))
+check('delegated-restrict-guard', src.includes('if (agent?.session?.header?.parentSession !== undefined) return'))
+check('delegated-shim-guard', src.includes('if (agent?.session?.header?.parentSession !== undefined) return 0'))
+
 // 3. 配置指向新一代（?v= 预期递增）
 check('config-points-v34', /router-bootstrap-v34\.mjs\?v=\d+/.test(cfg))
 check('config-v24-or-newer', /router-bootstrap-v34\.mjs\?v=(2[4-9]|[3-9]\d+)/.test(cfg))
