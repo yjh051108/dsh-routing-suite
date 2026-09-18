@@ -128,5 +128,36 @@ check('v19-catalog-uses-runtime', src.includes('mark: runtimeMark(ctx.tools') &&
 check('v19-native-begin-desc', src.includes('呈现为 native 直调'))
 check('v19-no-stale-code-mode-contract', !src.includes('Code Mode 契约') && !src.includes('lossless JSON 结束'))
 
+// 13. #96 修复：goal 通知必须是合法的 released-format UserMessage。
+// 缺 message.id（或 form:'notice' 缺 source.summary）时，deferContext 的对象经
+// inbox.splice 原样落盘成 agent/inbox/spliced，再被 claim 成 surface user/message；
+// dsh 的 v2→v3 迁移校验拒绝该行 → 整个会话无法再打开（数据没丢，但读不出来）。
+{
+  const bodies = []
+  const marker = 'deferContext('
+  let at = src.indexOf(marker)
+  while (at !== -1) {
+    let i = at + marker.length
+    while (i < src.length && /\s/.test(src[i])) i += 1
+    if (src[i] !== '{') { at = src.indexOf(marker, i); continue }
+    let depth = 0
+    const start = i
+    for (; i < src.length; i += 1) {
+      if (src[i] === '{') depth += 1
+      else if (src[i] === '}') { depth -= 1; if (depth === 0) break }
+    }
+    bodies.push(src.slice(start, i + 1))
+    at = src.indexOf(marker, i)
+  }
+  check('v96-defer-context-present', bodies.length > 0)
+  check('v96-defer-context-id', bodies.every((b) => /\bid\s*:/.test(b)))
+  check('v96-defer-context-id-nonempty', bodies.every((b) => {
+    const m = /\bid\s*:\s*([^,\n]+)/.exec(b)
+    const v = m && m[1].trim()
+    return v && v !== "''" && v !== '""'
+  }))
+  check('v96-notice-summary', bodies.every((b) => !/form\s*:\s*'notice'/.test(b) || /\bsummary\s*:/.test(b)))
+}
+
 if (fails.length) { console.error('SELFTEST FAIL:', fails.join(' | ')); process.exit(1) }
 console.log('SELFTEST PASS')
