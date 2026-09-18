@@ -2754,6 +2754,7 @@ export function apply(ctx: AppContext, config: Config): void {
     const env = (process.env as Record<string, string | undefined>).DSH_CHECKOUT
     if (env && existsSync(join(env, 'packages'))) return env
     const candidates = [
+      join(homedir(), 'deepseek-harness'),
       join(homedir(), 'dsh-harness'),
       join(homedir(), 'dsh'),
       join(homedir(), '.dsh', 'dsh-harness'),
