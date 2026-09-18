@@ -27,8 +27,16 @@ link_pkg() {
   node -e "
     const fs = require('fs');
     const path = require('path');
+    const nodeModules = path.resolve('node_modules');
+    const checkoutRoot = path.resolve(process.env.DSH_CHECKOUT);
     const link = path.resolve(process.argv[1]);
     const target = path.resolve(process.argv[2]);
+    if (link !== nodeModules && !link.startsWith(nodeModules + path.sep)) {
+      throw new Error('refusing to link outside node_modules: ' + link);
+    }
+    if (target !== checkoutRoot && !target.startsWith(checkoutRoot + path.sep)) {
+      throw new Error('refusing to link target outside checkout: ' + target);
+    }
     fs.rmSync(link, { recursive: true, force: true });
     fs.mkdirSync(path.dirname(link), { recursive: true });
     fs.symlinkSync(target, link, process.platform === 'win32' ? 'junction' : 'dir');
