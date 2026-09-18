@@ -2087,6 +2087,14 @@ export function apply(ctx: AppContext, config: Config): void {
   const SLOT_ALT = KNOWN_SLOTS.map((s) => s.replace(/\./g, '\\.')).join('|')
   const REGISTER_NAME = new RegExp(`register\\(\\{[\\s\\S]*?name:\\s*['"](${SLOT_ALT})['"]`)
 
+  /** client 是否真的使用 slots 服务：声明 inject 含 slots / 调 slots.register / 读 ctx.slots。
+   *  三者皆无 = 非 slot 式 UI（路由式面板如 dsh-browser-panel、纯占位 client 如 dsh-engram-relay），
+   *  slots 注入契约不适用，跳过骨架校验（2026-09-08 agi-harness 事件：两类合法 client 被误判为坏骨架而阻断注入）。 */
+  const usesSlots = (text: string): boolean =>
+    /inject\s*[=:]\s*\[[^\]]*['"]slots['"]/.test(text)
+    || /slots\s*\.\s*register\s*\(/.test(text)
+    || /ctx\s*\.\s*slots/.test(text)
+
   function clientSkeletonProblems(base: string): string[] {
     const problems: string[] = []
     try {
@@ -2095,22 +2103,26 @@ export function apply(ctx: AppContext, config: Config): void {
       const libClient = join(base, 'lib', 'client.js')
       if (existsSync(libClient)) {
         const lib = readFileSync(libClient, 'utf8')
-        if (!/inject\s*=\s*\[[^\]]*['"]slots['"]/.test(lib) && !/inject\s*:\s*\[[^\]]*['"]slots['"]/.test(lib)) {
-          problems.push('lib/client.js 缺 inject 含 slots（apply 用 ctx.slots 必须声明——cordis 服务注入契约）')
-        }
-        if (!REGISTER_NAME.test(lib)) {
-          problems.push(`lib/client.js 的 register 缺合法 name（应为已知 slot：${KNOWN_SLOTS.join(' / ')}）`)
+        if (usesSlots(lib)) {
+          if (!/inject\s*=\s*\[[^\]]*['"]slots['"]/.test(lib) && !/inject\s*:\s*\[[^\]]*['"]slots['"]/.test(lib)) {
+            problems.push('lib/client.js 缺 inject 含 slots（apply 用 ctx.slots 必须声明——cordis 服务注入契约）')
+          }
+          if (!REGISTER_NAME.test(lib)) {
+            problems.push(`lib/client.js 的 register 缺合法 name（应为已知 slot：${KNOWN_SLOTS.join(' / ')}）`)
+          }
         }
       }
       // 2. 源码骨架（有 src 时）
       const clientSrcPath = join(base, 'src', 'client', 'index.ts')
       if (existsSync(clientSrcPath)) {
         const src = readFileSync(clientSrcPath, 'utf8')
-        if (!/export const inject\s*=\s*\[[^\]]*['"]slots['"]/.test(src)) {
-          problems.push("src/client/index.ts 缺 export const inject = ['slots']（apply 用 ctx.slots 必须声明，否则报 cannot get property 'slots' without inject）")
-        }
-        if (!REGISTER_NAME.test(src)) {
-          problems.push(`slots.register 缺合法 name（应为已知 slot：${KNOWN_SLOTS.join(' / ')}——缺了报 slot undefined is not declared）`)
+        if (usesSlots(src)) {
+          if (!/export const inject\s*=\s*\[[^\]]*['"]slots['"]/.test(src)) {
+            problems.push("src/client/index.ts 缺 export const inject = ['slots']（apply 用 ctx.slots 必须声明，否则报 cannot get property 'slots' without inject）")
+          }
+          if (!REGISTER_NAME.test(src)) {
+            problems.push(`slots.register 缺合法 name（应为已知 slot：${KNOWN_SLOTS.join(' / ')}——缺了报 slot undefined is not declared）`)
+          }
         }
       }
     } catch { /* 读不到文件时跳过 */ }
