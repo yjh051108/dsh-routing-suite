@@ -572,6 +572,9 @@ const sharedLift = globalThis[Symbol.for('router-standard.restrictLift')] ?? (gl
 const overrideMap = () => globalThis[Symbol.for('router-standard.overrides')] ??= new Map()
 function applyStageRestrict(agent, stage) {
   try {
+    // 委派会话（子代理）不参与阶段门控：prompt 侧（system-prompt/assemble）已有同一判断，
+    // 门控侧漏了它——子代理因此被自己那条起步为 0 的阶段记录限制，执行工具中途被摘掉。
+    if (agent?.session?.header?.parentSession !== undefined) return
     const sid = agent?.session?.id
     const prev = sid ? sharedLift.get(sid) : undefined
     if (prev) { try { prev() } catch { /* ignore */ }; if (sid) sharedLift.delete(sid) }
@@ -679,6 +682,9 @@ export function apply(ctx, config) {
   ctx.on('agent/pre-step', async ({ agent, messages }, next) => {
     const decision = await next()
     if (agent === undefined || agent.session === undefined) return decision
+    // 委派会话不参与阶段门控（与 system-prompt/assemble 同一判断）：否则这里会为子代理新建一条
+    // 起步为 0 的阶段记录、把它自动推进到 1，再 installMetaShim + restrict，摘掉它的执行工具。
+    if (agent.session.header?.parentSession !== undefined) return decision
     const userMsg = (messages || []).find((m) => m.role === 'user' && m.source?.kind === 'user')
     const text = userMsg ? extractText(userMsg) : ''
     const sid = agent.session.id
@@ -940,6 +946,8 @@ export function apply(ctx, config) {
   /** forwarding shim：注册到 target 的**自身 scope**（own layer 不受旧 restrict 相交过滤），
    *  让当前热重载会话立即看到 meta 工具。 */
   function installMetaShim(agent, opts) {
+    // 委派会话不装配 shim：装配会把它从 main 注册面切到自己那条阶段记录上（阶段随之为 0）。
+    if (agent?.session?.header?.parentSession !== undefined) return 0
     const installStage = opts?.installStage !== false
     const curStage = opts?.stage ?? (agent?.session?.id ? ensureStage()[agent.session.id]?.stage ?? 0 : 0)
     const toolsSvc = agent?.ctx?.get?.('tools')
