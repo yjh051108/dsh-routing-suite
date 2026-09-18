@@ -93,7 +93,7 @@ const STAGES = [
 const STAGE_SAFE = STAGES.flatMap((s) => s.tools)
 const GLOBAL_SAFE = [
   ...STAGE_SAFE,
-  'tools_catalog', 'tools_help', 'dev_router_status', 'phase_begin', 'phase_advance',
+  'tools_catalog', 'tools_help', 'skill', 'dev_router_status', 'phase_begin', 'phase_advance',
   'engram_recall', 'engram_store', 'engram_propose', 'engram_confirm', 'engram_reject',
   'engram_open', 'engram_search', 'engram_link', 'engram_update', 'engram_remove',
   'engram_promote', 'engram_status', 'engram_verify', 'engram_respond',
@@ -101,7 +101,9 @@ const GLOBAL_SAFE = [
   'get_goal', 'create_goal', 'update_goal',
 ]
 
-const META_TOOLS = ['phase_advance', 'dev_router_status', 'tools_catalog', 'tools_help']
+// `skill` 属常驻层（2026-09-15）：宿主只在 `skill` 加载器对本 agent 可解析时才发布技能目录，
+// 一旦被阶段门控摘掉，宿主会把整份目录替换为空——模型连"有哪些方法论"都看不到。
+const META_TOOLS = ['phase_advance', 'dev_router_status', 'tools_catalog', 'tools_help', 'skill']
 const META_LIVE = [...META_TOOLS, 'dev_reload_preset_live', 'dev_page_check', 'phase_begin', 'delivery_check', 'dev_reset_experience']
 const META_GOAL = ['get_goal', 'create_goal', 'update_goal']
 const META_ALL = [...META_LIVE, ...META_GOAL]
