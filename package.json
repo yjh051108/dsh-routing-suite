@@ -23,6 +23,7 @@
   "files": [
     "injector/lib",
     "injector/scripts",
+    "injector/package.json",
     "cordis.patch.yml",
     "LICENSE",
     "README.md",
