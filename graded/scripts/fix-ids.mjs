@@ -7,18 +7,24 @@
  */
 import { execFileSync } from 'node:child_process'
 import { writeFileSync, readdirSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, resolve, sep } from 'node:path'
 import { zstdCompressSync, constants } from 'node:zlib'
 
 const CHECKSUM_OPTIONS = { params: { [constants.ZSTD_c_checksumFlag]: 1 } }
 const DSH = 'PATH_TO_DSH_HOME/sessions'
+const DSH_ROOT = resolve(DSH) + sep
 
 function zstdReadPy(zpath) {
+  const resolved = resolve(zpath)
+  if (!resolved.startsWith(DSH_ROOT)) {
+    console.error('read fail: path escapes DSH root:', zpath)
+    return null
+  }
   try {
     return execFileSync('python', ['-c',
       "import sys,zstandard as z; " +
       "sys.stdout.write(z.ZstdDecompressor().stream_reader(open(sys.argv[1],'rb')).read().decode('utf-8',errors='replace'))",
-      zpath], { maxBuffer: 300 * 1024 * 1024 }).toString('utf-8')
+      resolved], { maxBuffer: 300 * 1024 * 1024 }).toString('utf-8')
   } catch (e) {
     console.error('read fail:', zpath, String(e).slice(0, 80))
     return null
