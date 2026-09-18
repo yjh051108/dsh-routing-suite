@@ -183,7 +183,7 @@ export function muteAwareList(names, muted) {
 /** 会话是否为新会话（DSH request/header reason=initial）——即使 session id 复用了旧阶段记录，也自动从 0 开始。 */
 export function sessionFresh(agent) {
   try {
-    for (const e of agent?.session?.events || []) {
+    for (const e of sessionEvents(agent?.session)) {
       if (e.type === 'request/header' && e.data?.reason === 'initial') return true
     }
   } catch { /* 无法判定时按旧会话处理 */ }
@@ -194,7 +194,7 @@ export function sessionFresh(agent) {
  *  检测会话用户消息中的记忆禁用意图；命中后阶段指引不再提 recall/verify/engram。 */
 export function memoryMuted(session) {
   try {
-    const events = session?.events || []
+    const events = sessionEvents(session)
     const re = /不用记忆|勿用记忆|禁用记忆|记忆系统.*(不用|不要|禁用)|不要用记忆|no memory|without memory/i
     for (const e of events) {
       if (e.type !== 'user/message') continue
@@ -207,7 +207,7 @@ export function memoryMuted(session) {
 /** 会话任务回显（v1.19.1 引导工程）：取第一条真实用户消息，让模型每轮都看清"我在为哪件事工作"。 */
 export function firstUserTask(session) {
   try {
-    for (const e of session?.events || []) {
+    for (const e of sessionEvents(session)) {
       if (e.type !== 'user/message') continue
       const src = e.data?.source ?? e.data?.message?.source
       if (src?.kind !== 'user') continue
@@ -560,8 +560,8 @@ function saveStageState() {
  *  下一步重复计入并再次跳级（v0.3.0 缺陷）。事件下标是身份，不是时钟。 */
 function markStageConsumed(st, session) {
   st.stageAtTime = Date.now()
-  const events = session?.events
-  if (Array.isArray(events)) st.consumed = events.length
+  const events = sessionEvents(session)
+  if (events.length) st.consumed = events.length
 }
 
 /** restrict 交集修复：per-session disposer（释放旧再设新）。 */

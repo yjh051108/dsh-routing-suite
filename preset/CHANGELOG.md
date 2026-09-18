@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.28.0 — DSH 0.1.5 兼容修复（persona 字段迁移 + session.events API 迁移）
+
+**问题**：harness 更新到 0.1.5 后 router-standard / router-spec 挂载失败（`agent-preset/invalid`）。
+
+**根因（0.1.5 的破坏性变更）**：
+- `@deepseek-ai/dsh-persona` 配置 schema 从 `{ text }` 改为
+  `{ prefix(required), suffix, complete, includeRuntimeContext }`——preset 里 persona 行的
+  `text:` 键不再被接受，schema 校验报 `$.prefix missing required value`，该行无法激活，
+  `dsh-agent-presets` 的 mount 检查（`inactiveRows`）随即让整个预设挂载失败。
+- `dsh-session` 的 `Session` 移除了 `events` 数组 getter（改由 `snapshotEvents()` 提供）。
+
+**修复**：
+- router-standard / router-spec 的 persona 行 `text:` → `prefix:`（内容不变）。
+- router-bootstrap-v34.mjs 中 4 处裸 `session.events` 改用 core 已导出的
+  `sessionEvents()` 兼容助手（`sessionFresh` / `memoryMuted` / `firstUserTask` /
+  `markStageConsumed`）；router-core 的 `sessionMode`/`sessionEvents` 原本就带
+  `snapshotEvents()` 回退，无需改动。
+- bootstrap 行 cache-buster `?v=88` → `?v=89`。
+
+验证：DSH 0.1.5-rc.1/rc.2 下对两份 agent.cordis.yml 全行 schema 校验
+（cordis `Config["~standard"].validate` 语义）0 拒绝；`node --check` 通过。
+
 ## v1.27.0 — 隔离与并行（注意力工程 · 支柱4）
 
 **支柱4 隔离与并行**：当两个独立关注点污染单线程、或一个子问题吞噬主线预算时，用 subagent/workflow

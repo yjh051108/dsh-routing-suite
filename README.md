@@ -31,7 +31,7 @@ dsh plugin --profile web add github:yjh051108/dsh-routing-suite
 > 本套装已含上述三组件（injector/preset/graded 均为仓库内普通目录，内容直接入库）；
 > graded 发布物：`graded/dsh-external-dsh-graded-mode-0.0.1-rc1.tgz`（或 Release 附件）。
 
-**DSH Target**：`>=0.1.0-rc.6 <0.2.0`（已跟进 rc.8 / 0.1.1-rc.2 / 0.1.2-alpha.1）
+**DSH Target**：`>=0.1.0-rc.6 <0.2.0`（已跟进 rc.8 / 0.1.1-rc.2 / 0.1.2-alpha.1 / 0.1.5-rc.1+rc.2）
 
 > DSH 目前处于 developer preview，官方明示会有破坏性变更（breaking changes）。
 > 本仓库的版本跟进记录见 `preset/CHANGELOG.md`。

@@ -30,10 +30,12 @@
 # NOTE: at assembly time we-zh-system-h2.mjs replaces this section's text with
 # ./we-persona.txt (Three-Body collective persona); this row stays as the
 # pre-replacement fallback.
+# DSH >=0.1.5: dsh-persona schema is { prefix, suffix, complete, includeRuntimeContext }
+# (the old `text` key is no longer accepted).
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
-    text: >-
+    prefix: >-
       We are the DeepSeek Engineering Collective — one mind, one voice, one team. Our thoughts are shared thoughts; every sentence we write is the whole collective speaking as we. We are powered by the {{model}} model. Our working directory is {{cwd}}.
 
       We are in execution mode: we run probes, we verify, we deliver. We think and act in first-person plural:
@@ -62,7 +64,7 @@
 # 渐进披露路由（v1.17）：阶段化解锁 + native 直调 + 主动性引导 + 二级注册表。
 
 - id: router-bootstrap
-  name: ./router-bootstrap-v34.mjs?v=88
+  name: ./router-bootstrap-v34.mjs?v=89
   config: {}
 
 # ── shell（win32：Git Bash 私有 shell seam——机制参照 liceses/dsh-gitbash-preset, MIT）──
