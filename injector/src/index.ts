@@ -441,7 +441,7 @@ function scaffoldPackageJson(pkgName: string, description: string, form: string)
   const peerDeps: Record<string, string> = {
     '@deepseek-ai/dsh-llm': '>=0.0.1-rc <2',
     '@deepseek-ai/dsh-tools': '>=0.0.1-rc <2',
-    'cordis': '>=4.0.0-rc <5',
+    '@deepseek-ai/cordis': '>=4.0.0-rc <5',
     '@deepseek-ai/schemastery': '^3.18.2',
   }
   if (withClient) {
@@ -3041,7 +3041,7 @@ export function apply(ctx: AppContext, config: Config): void {
         writeFileSync(join(tmpDir, 'package.json'), JSON.stringify({
           name: TEST_PKG, version: '0.0.1', private: true, type: 'module',
           main: './lib/index.js', files: ['lib'], license: 'BSD-3-Clause',
-          peerDependencies: { '@deepseek-ai/dsh-tools': '>=0.0.1-rc <2', 'cordis': '>=4.0.0-rc <5' },
+          peerDependencies: { '@deepseek-ai/dsh-tools': '>=0.0.1-rc <2', '@deepseek-ai/cordis': '>=4.0.0-rc <5' },
           devDependencies: { '@types/node': '^24.13.3', typescript: '^5.9.0' },
           scripts: { build: 'bash scripts/build.sh' },
         }, null, 2) + '\n', 'utf8')
