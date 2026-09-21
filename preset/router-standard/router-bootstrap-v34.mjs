@@ -81,9 +81,14 @@ const START_GUIDE =
   + 'You route yourself: to advance, complete the current phase — alignment (ask_user_question / plan recorded) → planning (plan locked) → development (self-check) → verification (delivery_check) — or call phase_advance; tool usage alone never skips a stage.'
 
 const STAGES = [
-  { name: '了解/对齐', tools: ['read', 'glob', 'grep', 'web_search', 'ask_user_question', 'engram_recall', 'engram_verify', 'engram_respond'] },
-  { name: '拟合方案', tools: ['todo_write', 'exit_plan_mode', 'engram_search', 'engram_open'] },
-  { name: '开发', tools: ['write', 'edit', 'str_replace_editor', 'engram_store', 'engram_link'] },
+  // 此处原有 engram_recall/verify/respond/search/open/store/link——engram_* 全组在部署里
+  // 并不存在（记忆工具由 dsh-mnemon 提供，现行名为 mnemon_*）。依据 catalogMarkExtra 语义，
+  // mnemon_* 属 host 类（不在 STAGES/META_ALL）→ 设计上恒可调（标注「宿主·常驻」）；
+  // 故正确修法是移除这些幽灵名，而非把它们写入 GLOBAL_SAFE——后者会反过来把恒可调的
+  // 宿主记忆工具门控住、并破坏启动流程。
+  { name: '了解/对齐', tools: ['read', 'glob', 'grep', 'web_search', 'ask_user_question'] },
+  { name: '拟合方案', tools: ['todo_write', 'exit_plan_mode'] },
+  { name: '开发', tools: ['write', 'edit', 'str_replace_editor'] },
   { name: '验证', tools: ['pwsh', 'bash', 'read_image', 'job_list', 'job_output', 'job_kill'] },
 ]
 // 平台事实（v1.12）：win32 已由 gitbash-shell 组提供真 Git Bash（isolate realm 私有 shell seam，
@@ -94,15 +99,19 @@ const STAGE_SAFE = STAGES.flatMap((s) => s.tools)
 const GLOBAL_SAFE = [
   ...STAGE_SAFE,
   'tools_catalog', 'tools_help', 'dev_router_status', 'phase_begin', 'phase_advance',
-  'engram_recall', 'engram_store', 'engram_propose', 'engram_confirm', 'engram_reject',
-  'engram_open', 'engram_search', 'engram_link', 'engram_update', 'engram_remove',
-  'engram_promote', 'engram_status', 'engram_verify', 'engram_respond',
+  // 原列 12 个 engram_*（recall/store/propose/confirm/reject/open/search/link/update/
+  // remove/promote/status/verify/respond）——全组不存在于部署的运行时。它们唯一的
+  // 效果是被 restrict 的 known 过滤静默摘除（行为中性），却让阶段表宣称依赖不存在的
+  // 工具。移除即恢复声明的诚实性。
   'dev_reload_preset_live', 'delivery_check',
   'get_goal', 'create_goal', 'update_goal',
 ]
 
 const META_TOOLS = ['phase_advance', 'dev_router_status', 'tools_catalog', 'tools_help']
-const META_LIVE = [...META_TOOLS, 'dev_reload_preset_live', 'dev_page_check', 'phase_begin', 'delivery_check', 'dev_reset_experience']
+// 移除悬空的 dev_page_check：其工具定义已删（v1.23 起 delivery_check 不再复用
+// pageCheckRun），运行时注册表查无此工具，留在 META_LIVE 只会让 stageInfo 把它
+// 误判为 meta（真判定应为 host）。
+const META_LIVE = [...META_TOOLS, 'dev_reload_preset_live', 'phase_begin', 'delivery_check', 'dev_reset_experience']
 const META_GOAL = ['get_goal', 'create_goal', 'update_goal']
 const META_ALL = [...META_LIVE, ...META_GOAL]
 
@@ -118,7 +127,7 @@ export function windowFor(stage) { return Math.min(stage + 1, STAGES.length) }
  *  v1.6：预放两档 + 直达语义（写 HTML 直给任务零路由成本）；跨语言转义提醒。 */
 const STAGE_GUIDES = [
   'Phase: understanding. Unlocked: this stage only — read/glob/grep/web_search/ask_user_question + memory recall/verify/respond. Ground first: recall → verify → read/ask. Do this stage properly and think broadly — do not settle on the first obvious reading. Break the request into its dimensions (what the user wants, how features should behave, what "good" looks like) and surface the genuinely ambiguous ones: a word like "拖拽" could mean reorder, drag-to-recategory, or both; "瀑布流" could mean masonry columns or JS-grid; persistence is often unspecified. **Decide each ambiguity by its impact:** if you can infer the common meaning and only one interpretation is reasonable for a deliverable, state that assumption clearly in one sentence (so the user can correct it) and continue — but if two or more interpretations would materially change the result (reorder vs recategory; persist vs not), ask ONE focused ask_user_question per such ambiguity, with concrete options. Do not under-ask (assume everything) nor over-ask (interrogate trivia) — aim for the questions that actually change the artifact. This is a deep-thinking stage: if the task is complex, also record a plan (todo_write). **Complete when: you understand the task (assumptions stated, or key ambiguities answered) — and, if complex, a plan is recorded. No alignment, no advancement.** → Done? Understood (stated assumption / question answered / plan recorded) → next stage.',
-  'Phase: planning. Unlocked: todo_write/exit_plan_mode + memory review (search/open). Do this stage properly: design the approach, cover edge cases, define what "done" means, and decide acceptance criteria — not just list steps. **Attention reclamation (v1.26): assetize your context — keep the task goal + the current decision + the live evidence in the attention window; sink settled exploration/details into memory (engram_store) instead of holding them all; let stale, superseded, or resolved threads truly drop (fresh context recovers attention). Do not hold "everything might be useful" in mind — that is attention leakage, not diligence.** **Isolation & parallel (pillar 4): when two independent concerns are polluting one thread, or a sub-problem is eating the mainline budget, push it into a subagent / workflow (independent context) instead of keeping it in the same stream — a focused subagent holds its own attention so your mainline stays on the critical path.** **Complete when: the plan is thorough enough that the design is decision-complete (what to build, how it fits, what success looks like), recorded via todo_write or presented via exit_plan_mode.** Only this lets you enter development. Note: a completion signal (todo_write / exit_plan_mode) AUTO-advances to the next phase — do NOT call phase_advance after it, or you will skip a phase. → Done? Plan is decision-complete and locked (todo_write / exit_plan_mode) → develop (auto).',
+  'Phase: planning. Unlocked: todo_write/exit_plan_mode + memory review (search/open). Do this stage properly: design the approach, cover edge cases, define what "done" means, and decide acceptance criteria — not just list steps. **Attention reclamation (v1.26): assetize your context — keep the task goal + the current decision + the live evidence in the attention window; sink settled exploration/details into memory (mnemon_remember) instead of holding them all; let stale, superseded, or resolved threads truly drop (fresh context recovers attention). Do not hold "everything might be useful" in mind — that is attention leakage, not diligence.** **Isolation & parallel (pillar 4): when two independent concerns are polluting one thread, or a sub-problem is eating the mainline budget, push it into a subagent / workflow (independent context) instead of keeping it in the same stream — a focused subagent holds its own attention so your mainline stays on the critical path.** **Complete when: the plan is thorough enough that the design is decision-complete (what to build, how it fits, what success looks like), recorded via todo_write or presented via exit_plan_mode.** Only this lets you enter development. Note: a completion signal (todo_write / exit_plan_mode) AUTO-advances to the next phase — do NOT call phase_advance after it, or you will skip a phase. → Done? Plan is decision-complete and locked (todo_write / exit_plan_mode) → develop (auto).',
   'Phase: development. Unlocked: write/edit/str_replace_editor + memory write (store/link). Re-read before re-edit (editor enforces fresh read); write/edit results carry FULL before/after text — take path/operation, inspect with grep/read. Do this stage properly: make the artifact real, self-check it against the plan and the acceptance criteria, and do not declare it done until it actually passes its own check. **Avoid local-optima (v1.22): keep the WHOLE artifact working while you iterate. If you find yourself re-fighting the same detail for several rounds with no convergence (e.g. a finite-difference sign, a conservation drift), step back: (1) is this detail blocking the overall deliverable, or is it polish? (2) preserve a working version; iterate on the detail in parallel, not by stalling the whole. (3) if a detail resists, finish the rest and re-attack it fresh — do not let one stubborn sub-problem stall the deliverable.** **Complete when: the artifact exists and passes its self-check — then enter verification via delivery_check (completion signal) or phase_advance.** → Done? Self-check passes → delivery_check → verification.',
   'Phase: verification → delivery gate. Unlocked: pwsh/bash/read_image/jobs + delivery_check. Windows: bash = Git Bash (first-class), pwsh for PowerShell; Git Bash may need the one-shot sandbox escalation (approval=never: if denied, report it — never bypass). Page verify with your OWN tools: run a headless browser/playwright via bash (or install one), screenshot + read_image each shot (reviewed:true) to visually confirm. **On verification failure, hold a quick hypothesis-audit (guidance, not a hard block): before touching the implementation, name in one line (a) which assumption you are now re-checking, (b) what NEW evidence you just gained — this turns "doubt the hypothesis" from a prompt into a habit. If the code is actually correct, say so and move on (do not manufacture a bug to justify rework).** Then check gates/evidence. Do this stage properly: verify the real artifact, not a summary of it — check evidence, look for defects, review the visuals honestly. **Gate: delivery_check must PASS — evidence manifest required; missing evidence/unreviewed visuals = FAIL.**',
 ]
@@ -171,11 +180,14 @@ export function categorizeDomain(name, desc) {
   if (/(bash|pwsh|shell|run_code|exec|command|spawn)/i.test(t)) return 'exec'
   if (/(web|search|fetch|http|network|browse)/i.test(t)) return 'network'
   if (/(subagent|agent|delegate|workflow|ralph|fork)/i.test(t)) return 'delegate'
-  if (/(engram|memory|recall|store|search)/i.test(t)) return 'memory'
+  if (/(engram|mnemon|memory|recall|store|search)/i.test(t)) return 'memory'
   return 'other'
 }
-/** 记忆工具判定（v1.16：#4 用户禁用记忆 → 调用面+注入面双双剔除，不是只改引导句）。 */
-export function isMemoryTool(name) { return /^engram_/.test(String(name || '')) }
+/** 记忆工具判定（v1.16：#4 用户禁用记忆 → 调用面+注入面双双剔除，不是只改引导句）。
+ *  原为 /^engram_/——现行记忆工具由 dsh-mnemon 提供、名为 mnemon_*，旧正则恒为 false，
+ *  导致「用户禁用记忆」的剔除**完全未执行**（引导句改了，调用面与注入面没动）。
+ *  现同时匹配 engram_（历史名）与 mnemon_（现行名）。 */
+export function isMemoryTool(name) { return /^(engram|mnemon)_/.test(String(name || '')) }
 export function muteAwareList(names, muted) {
   return muted ? (names || []).filter((n) => !isMemoryTool(n)) : names
 }
@@ -191,7 +203,7 @@ export function sessionFresh(agent) {
 }
 
 /** 用户显式禁用（v1.15 建议 #4——还原不是控制：用户说"不用记忆"就不再引导）。
- *  检测会话用户消息中的记忆禁用意图；命中后阶段指引不再提 recall/verify/engram。 */
+ *  检测会话用户消息中的记忆禁用意图；命中后阶段指引不再提 recall/verify/mnemon。 */
 export function memoryMuted(session) {
   try {
     const events = session?.events || []
@@ -228,9 +240,9 @@ function stageText(stage, runtimeList, muted, taskText = '') {
   let guide = STAGE_GUIDES[stage] || ''
   if (muted) {
     guide = guide
-      .replace(/ \+ memory \(engram_recall\/verify\/respond\)/, ' (memory disabled by user)')
-      .replace(/ \+ memory review \(engram_search\/open\)/, ' (memory disabled by user)')
-      .replace(/ \+ memory write \(engram_store\/link\)/, ' (memory disabled by user)')
+      .replace(/ \+ memory \(mnemon_recall\)/, ' (memory disabled by user)')
+      .replace(/ \+ memory review \(mnemon_document_search\/mnemon_recall\)/, ' (memory disabled by user)')
+      .replace(/ \+ memory write \(mnemon_remember\/mnemon_link\)/, ' (memory disabled by user)')
       .replace(/Ground first: recall, verify claims, then read\/ask for the rest\./, 'Ground first: read/ask for the rest (memory disabled by user).')
   }
   if (stage >= STAGES.length - 1) {
@@ -371,7 +383,7 @@ export function runtimeMark(toolsSvc, scope, name) {
 }
 
 /** 运行时真实可调列表（v1.14——与 SDK 绑定 100% 同源：visible 全集）。
- *  不再按 STAGES/META 过滤：scope-local 工具（dev_*、engram_* 等宿主插件注册）真实可调也必须列出，
+ *  不再按 STAGES/META 过滤：scope-local 工具（dev_*、mnemon_* 等宿主插件注册）真实可调也必须列出，
  *  否则状态文本与绑定不一致（"到底能调什么"只能靠试错——用户实测指控）。 */
 export function runtimeCallable(toolsSvc, scope) {
   try {
@@ -1092,7 +1104,11 @@ export function apply(ctx, config) {
         const targetSid2 = shimArgs?.targetSessionId || target2.session?.id || sid
         const before2 = ap2.composedPreset(target2.ctx) ?? 'unknown'
         if (before2 === 'unknown') return 'ERROR: 未加入预设'
-        const ymlFile2 = join(process.env.DSH_HOME || homedir(), '.agent-presets', before2, 'agent.cordis.yml')
+        // 原为裸 homedir()：DSH 家目录通常是 <home>/.dsh（可由 DSH_HOME 覆盖），而
+        // os.homedir() 少了 .dsh 这一层——路径丢掉后读取恒 ENOENT，本 shim 完全不可用。
+        // 改用本文件既有的 dshHomeForState()（= process.env.DSH_HOME ||
+        // join(homedir(), '.dsh')），与 router-bootstrap 其他状态路径同口径（见 issue #100）。
+        const ymlFile2 = join(dshHomeForState(), '.agent-presets', before2, 'agent.cordis.yml')
         let yml2 = ''
         try { yml2 = readFileSync(ymlFile2, 'utf8') } catch (e) { return 'ERROR: 读取失败 ' + String(e) }
         const refRe2 = /(name: \.\/[A-Za-z0-9._-]+\.mjs)(\?v=\d+)?/g
