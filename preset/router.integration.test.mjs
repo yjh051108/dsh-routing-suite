@@ -271,7 +271,7 @@ test('v1.18.1: phase_advance groups New this stage vs Pre-unlocked', async () =>
   const out = String(await adv.execute({}))
   assert.match(out, /advanced to phase 1/)
   assert.match(out, /New this stage: todo_write/)
-  assert.match(out, /New this stage:.*engram_open/)
+  assert.match(out, /New this stage: todo_write \| exit_plan_mode/, '阶段 1 解锁的是两个真实存在的规划工具（engram_* 幽灵名已移除）')
   assert.ok(!out.includes('Pre-unlocked'), 'v1.20: no pre-unlock group in the advance card')
   assert.match(out, /Next goal: 拟合方案/, 'advance card states the next goal')
   assert.ok(out.includes('\n'), 'card content on its own line')
