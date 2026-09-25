@@ -18,11 +18,16 @@
       "types": "./injector/lib/types/client/index.d.ts",
       "default": "./injector/lib/client.js"
     },
+    "./preset/router-standard/router-bootstrap-v34.mjs": "./preset/router-standard/router-bootstrap-v34.mjs",
+    "./preset/router-standard/gitbash-executor.mjs": "./preset/router-standard/gitbash-executor.mjs",
     "./package.json": "./package.json"
   },
   "files": [
     "injector/lib",
+    "injector/package.json",
     "injector/scripts",
+    "preset/router-standard",
+    "preset/router-standard.patch.yml",
     "cordis.patch.yml",
     "LICENSE",
     "README.md",
@@ -51,7 +56,10 @@
   "engines": { "node": ">=22" },
   "dsh": {
     "bundle": {
-      "patch": "./cordis.patch.yml"
+      "patch": [
+        "./cordis.patch.yml",
+        "./preset/router-standard.patch.yml"
+      ]
     },
     "client": {
       "inject": [

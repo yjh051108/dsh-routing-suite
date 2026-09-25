@@ -15,7 +15,7 @@
  */
 
 import {
-  bandFor, sessionMode, extractText, isComplexTask, sessionEvents
+  bandFor, sessionMode, extractText, sessionEvents, personaFor, classifyTask
 } from './router-core-v34.mjs'
 import { join, dirname } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
@@ -54,7 +54,47 @@ function toJsonSchema(spec) {
 }
 
 const RL_PERSONA = 'You are a helpful software engineer assistant.'
-const ROUTER_VERSION = 'v1.20.0'
+/**
+ * v1.21：接通 core 已设计好的多 persona 路由（此前 v34 只硬编码 SPEC_PERSONA，
+ * 把 personaFor 的四档 persona 全部旁路：react 模式拿不到 REACT_PERSONA、
+ * 弱模型拿不到 WEAK_*，与 router-core 的 band 设计不一致）。
+ *
+ * modelId 取该会话当前选择（弱档据此在 WEAK_PRO / WEAK_FLASH 间二选一）。
+ */
+function personaOf(mode, modelId) {
+  try {
+    return personaFor(mode, modelId)
+  } catch {
+    return RL_PERSONA
+  }
+}
+
+/**
+ * mode 解析单源（v1.21 审计修复）：注入面与 dev_router_status 必须同源，
+ * 否则状态面报的 band/persona 与模型真实收到的不是一回事。
+ *
+ * 优先级（首轮 assemble 时 session.events 往往还不含本条用户消息——
+ * agent/inbox/claimed 先于 assemble，消息在 pre-step 之后才落盘）：
+ *   1) 显式 override（用户/工具切换）
+ *   2) firstUserText（claimed 阶段捕获的首条真实用户文本）
+ *   3) sessionMode(session)（durable events 兜底，resume 场景）
+ */
+function modeOf(session, override, firstText) {
+  if (override !== undefined && override !== null) return override
+  const byText = classifyText(firstText)
+  if (byText !== undefined) return byText
+  try {
+    return sessionMode(session)
+  } catch {
+    return 'weak'
+  }
+}
+
+/** classifyTask 的薄封装：文本缺失时不误判（返回 undefined 交给下游兜底）。 */
+function classifyText(text) {
+  return typeof text === 'string' && text.trim() ? classifyTask(text) : undefined
+}
+const ROUTER_VERSION = 'v1.21.0'
 /* 描述单源（v1.13 审计修复）：main 注册与 own-layer shim 读同一份，杜绝双份漂移。 */
 const DESC = {
   toolsCatalog: '渐进式披露一级：默认只列当前阶段可调工具（未解锁不点名、不预告后续工具）；query 单点白盒（命中未解锁才给相关行，带解锁阶段/交付期标注）；无全量出口——严格按阶段推进，未解锁工具名称不进入视野。行标注=运行时真绑定。',
@@ -640,22 +680,24 @@ export function apply(ctx, config) {
     if (selectedModel?.model) sessionModels.set(session.id, selectedModel)
 
     const promoted = sessionEvents(session).some((event) => event.type === 'tool/call')
+    const resolvedMode = modeOf(session, overrideMap().get(session.id), firstUserText.get(session.id))
+    const sessionPersona = personaOf(resolvedMode, sessionModels.get(session.id)?.model)
     const planSection = (assembled.sections || []).find((s) => /plan/i.test(s.name))
     const baseSections = planSection
-      ? [planSection, { name: 'router-persona', text: RL_PERSONA, order: 0 }]
-      : [{ name: 'router-persona', text: RL_PERSONA, order: 0 }]
+      ? [planSection, { name: 'router-persona', text: sessionPersona, order: 0 }]
+      : [{ name: 'router-persona', text: sessionPersona, order: 0 }]
 
     if (!promoted) {
       // 首轮：无 restrict + 工具面只留 phase_begin（纯 RL 条件 = 稳定 we）
       return { ...assembled, sections: baseSections, contexts: [], tools: assembled.tools.filter((tool) => tool.name === 'phase_begin') }
     }
 
-    // promoted：官方 sections 回流（persona 保持 RL 句）+ 引导带宽控 + 阶段声明 + 常驻段
+    // promoted：官方 sections 回流（persona 按 mode 保持）+ 引导带宽控 + 阶段声明 + 常驻段
     const stage = ensureStage()[session.id]?.stage ?? 0
     const toolsSvc = agent?.ctx?.get?.('tools')
     const fullNames = knownToolNames(toolsSvc, agent)
     const sections = filterToolGuidance((assembled.sections || []).map((s) =>
-      /persona/i.test(s.name) ? { ...s, text: RL_PERSONA } : s
+      /persona/i.test(s.name) ? { ...s, text: sessionPersona } : s
     ), stage, fullNames)
     // v1.18.1 口径统一：先安装 meta shim，再基于同一注册面渲染 stageText（与 dev_router_status 同源）
     if (!shimmedSessions.has(session.id)) {
@@ -755,7 +797,7 @@ export function apply(ctx, config) {
           currentAgent()?.inbox.append('next-step', {
             id: 'bootstrap-fresh-' + Date.now(),
             role: 'user',
-            source: { kind: 'plugin', plugin: 'router-bootstrap' },
+            source: { kind: 'plugin:router-bootstrap' },
             content: [{ type: 'text', text: guide }],
           })
         } catch { /* skip */ }
@@ -788,7 +830,7 @@ export function apply(ctx, config) {
         currentAgent()?.inbox.append('next-step', {
           id: 'bootstrap-' + Date.now(),
           role: 'user',
-          source: { kind: 'plugin', plugin: 'router-bootstrap' },
+          source: { kind: 'plugin:router-bootstrap' },
           content: [{ type: 'text', text: guide }],
         })
       } catch { /* skip */ }
@@ -893,14 +935,14 @@ export function apply(ctx, config) {
       const agent = currentAgent()
       const stage = ensureStage()[sid]?.stage ?? 0
       const sum = stageSummary(stage)
-      const mode = overrideMap().get(sid) ?? sessionMode(session)
+      const mode = modeOf(session, overrideMap().get(sid), firstUserText.get(sid)) // v1.21：与注入面同源
       return [
         'router=standard (progressive, ' + ROUTER_VERSION + ')',
         'phase=' + sum.name + ' (' + sum.stage + '/3)',
         'callable=[' + muteAwareList(runtimeCallable(agent?.ctx?.get?.('tools'), agent), memoryMuted(session)).join(', ') + ']', // v1.11/v1.18.3 运行时事实（与 SDK 绑定同源；与 shim 版同口径）
         'presentation=' + readPresentation(agent),
         'mode=' + fmtMode(mode) + ' (band=' + bandFor(mode) + ')',
-        'persona=' + RL_PERSONA,
+        'persona=' + personaOf(mode, sessionModels.get(sid)?.model),
         'override=' + (overrideMap().has(sid) ? String(overrideMap().get(sid)) : 'auto'),
         'preset=' + (ctx.get('agentPresets')?.composedPreset?.(agent?.ctx) ?? 'unknown'),
         'goalTools=get_goal/create_goal/update_goal',
@@ -1018,9 +1060,9 @@ export function apply(ctx, config) {
       parameters: {},
       execute: async () => {
         const sum = stageSummary(stageOf())
-        const mode = overrideMap().get(sid) ?? sessionMode(agent?.session)
+        const mode = modeOf(agent?.session, overrideMap().get(sid), firstUserText.get(sid)) // v1.21：与注入面同源
         const cur = stageOf()
-        return 'router=standard (own-layer shim, ' + ROUTER_VERSION + ')\nphase=' + sum.name + ' (' + sum.stage + '/3)\ncallable(runtime)=' + muteAwareList(runtimeCallable(agent.ctx?.get?.('tools'), agent), memoryMuted(agent?.session)).join(', ') + '\npresentation=' + readPresentation(agent) + '\nmode=' + fmtMode(mode) + ' (band=' + bandFor(mode) + ')\npersona=' + RL_PERSONA + '\noverride=' + (overrideMap().has(sid) ? String(overrideMap().get(sid)) : 'auto') + '\npreset=' + (ctx.get('agentPresets')?.composedPreset?.(agent.ctx) ?? 'unknown') + '\ngoalTools=get_goal/create_goal/update_goal\nlastAdvance=' + (() => { const la = (ensureStage()[sid] || {}).lastAdvance; return la && Number.isFinite(la.at) ? new Date(la.at).toISOString() + (la.reason ? ' (' + la.reason + ')' : '') : 'none' })() + (cur >= STAGES.length - 1 ? '\nfullCatalog=restrict released (all tools open)' : '')
+        return 'router=standard (own-layer shim, ' + ROUTER_VERSION + ')\nphase=' + sum.name + ' (' + sum.stage + '/3)\ncallable(runtime)=' + muteAwareList(runtimeCallable(agent.ctx?.get?.('tools'), agent), memoryMuted(agent?.session)).join(', ') + '\npresentation=' + readPresentation(agent) + '\nmode=' + fmtMode(mode) + ' (band=' + bandFor(mode) + ')\npersona=' + personaOf(mode, sessionModels.get(sid)?.model) + '\noverride=' + (overrideMap().has(sid) ? String(overrideMap().get(sid)) : 'auto') + '\npreset=' + (ctx.get('agentPresets')?.composedPreset?.(agent.ctx) ?? 'unknown') + '\ngoalTools=get_goal/create_goal/update_goal\nlastAdvance=' + (() => { const la = (ensureStage()[sid] || {}).lastAdvance; return la && Number.isFinite(la.at) ? new Date(la.at).toISOString() + (la.reason ? ' (' + la.reason + ')' : '') : 'none' })() + (cur >= STAGES.length - 1 ? '\nfullCatalog=restrict released (all tools open)' : '')
       },
     })
 
@@ -1163,7 +1205,7 @@ export function apply(ctx, config) {
           if (args.action === 'blocked' && authority.kind === 'goal-round' && authority.goal.roundsStarted < 3) throw new Error('blocked requires at least 3 consecutive goal rounds')
           const goal = args.action === 'complete' ? goalsSvc.complete(execution.agent, ref) : goalsSvc.block(execution.agent, ref, { code: 'model-reported', message: String(args.blocked_reason || '') })
           if (authority.kind === 'goal-round' && exec && typeof exec.deferContext === 'function') {
-            exec.deferContext({ role: 'user', source: { kind: 'plugin', plugin: 'tool-goal', form: 'notice' }, content: [{ type: 'text', text: args.action === 'complete' ? '<goal_complete>' : '<goal_blocked>' }] })
+            exec.deferContext({ role: 'user', source: { kind: 'tool-goal', form: 'notice' }, content: [{ type: 'text', text: args.action === 'complete' ? '<goal_complete>' : '<goal_blocked>' }] })
           }
           return JSON.stringify(goalsValue(goal))
         }

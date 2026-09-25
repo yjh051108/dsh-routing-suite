@@ -78,7 +78,8 @@ export function isFlashModel(modelId) {
 
 /** Quantize a mode to one of the four measured behavior bands. */
 export function bandOf(mode) {
-  if (mode === 'weak') return 'weak'
+  // 入参按 MODE_* 常量判定；返回值是 band 名（weak/spec/transition/react），与 mode 值不同语义
+  if (mode === MODE_WEAK) return 'weak'
   const m = clamp01(mode)
   if (m < 0.2) return 'spec' // measured stable spec region (0..0.15)
   if (m < 0.5) return 'transition' // measured unstable band — avoid
@@ -133,23 +134,59 @@ function countHits(regex, text) {
 }
 
 /**
- * Classify a task text into a mode. Clear keyword evidence picks a stable
- * band (1 react / 0 spec); AMBIGUOUS or unmatched text returns 'weak' —
- * the internal-routing mode, where the model decides per task (P11 optimum).
+ * Classify a task text into a mode.
+ *
+ * v1.21：决策权收窄到"高置信度"才强制档位，其余一律 weak（模型自判）。
+ *
+ * 此前实现是 react/spec 关键词计数"谁多谁赢"：任一档命中数领先就强制该
+ * persona，只有打平/无命中才落 weak。后果是关键词表缺项（如"设计/架构/
+ * 系统/数据库/方案"）的任务被武断分档，违背 weak = internal-routing 的
+ * 设计本意（router-core L11：weak 域由模型按任务自行路由，P11 实测最佳）。
+ *
+ * 现规则（互斥判据，不再比多少）：
+ *   react 独占（有开发动词语义、无修复语义）→ 1  pure react
+ *   spec  独占（有修复/诊断语义、无开发动词语义）→ 0  pure spec
+ *   两边同时命中（语义混杂）→ 'weak'（歧义交给模型）
+ *   两边都不命中（含设计/架构/系统类）→ 'weak'（交给模型）
  */
 export function classifyTask(text) {
   const react = countHits(REACT_RE, text)
   const spec = countHits(SPEC_RE, text)
-  if (react > spec) return 1
-  if (spec > react) return 0
+  if (react > 0 && spec === 0) return 1
+  if (spec > 0 && react === 0) return 0
   return 'weak'
+}
+
+/**
+ * Whether a durable message carries a plugin-injected source.
+ *
+ * Session format v4 replaced the literal `kind: 'plugin'` (plus a sibling
+ * `plugin` name field) with producer-owned kinds shaped `plugin:<name>`, so a
+ * `kind !== 'plugin'` comparison silently stops filtering injected messages
+ * (router Bootstrap guide, approval notices, runtime context). Match both the
+ * retired literal and the current prefixed form.
+ */
+export function isPluginSource(kind) {
+  return kind === 'plugin' || (typeof kind === 'string' && kind.startsWith('plugin:'))
+}
+
+/**
+ * Resolve a durable user/message's source kind across both shapes: the flat
+ * `data.source` and the legacy nested `data.message.source` (issue #1 seed).
+ */
+export function sourceKindOf(data) {
+  return (data?.source ?? data?.message?.source)?.kind
 }
 
 /** Per-session mode derived from durable events (resume-safe). */
 export function sessionMode(session) {
   const events = session.events || (typeof session.snapshotEvents === 'function' ? session.snapshotEvents() : [])
-  // #13：跳过插件注入的消息（approval/runtime-context/router 引导）——它们不代表任务
-  const userMsg = events.find((e) => e.type === 'user/message' && e.data?.source?.kind !== 'plugin')
+  // v1.21：口径与 bootstrap 的 firstUserText 对齐——只认 kind==='user' 的真实用户消息。
+  // 此前是 !isPluginSource(...)，只排除 plugin / plugin:*，放行了 skill-catalog、
+  // dsh-mnemon 等非用户注入（实测这两类文本 classifyTask 都判 weak）。于是首条真实
+  // 任务一旦不排在最前，mode 就从 0(spec) 漂移成 weak —— 与 #143 同类的时序 bug。
+  // 保留第二段兜底：整份 transcript 没有 kind==='user' 时退化到首条 user/message。
+  const userMsg = events.find((e) => e.type === 'user/message' && sourceKindOf(e.data) === 'user')
     ?? events.find((e) => e.type === 'user/message')
   return classifyTask(extractText(userMsg?.data))
 }
@@ -212,10 +249,11 @@ export function parseMode(token) {
   if (token === undefined || token === null) return null
   const t = String(token).trim().toLowerCase()
   if (t === 'auto') return 'auto'
-  if (t === 'weak' || t === 'router') return 'weak'
-  if (t === 'spec' || t === 'spec-lean') return 0
-  if (t === 'balanced' || t === 'mixed') return 0.3 // transition-band center
-  if (t === 'react' || t === 'react-lean') return 1
+  // v1.21：口径单源——四档取 MODE_* 常量，不再各处散落 0 / 0.3 / 1 / 'weak' 字面量
+  if (t === 'weak' || t === 'router') return MODE_WEAK
+  if (t === 'spec' || t === 'spec-lean') return MODE_SPEC
+  if (t === 'balanced' || t === 'mixed') return MODE_MIXED // transition-band center
+  if (t === 'react' || t === 'react-lean') return MODE_REACT
   const n = Number(t)
   if (!Number.isFinite(n)) return null
   if (t.includes('.')) return clamp01(n)

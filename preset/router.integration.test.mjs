@@ -23,7 +23,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply as applyStandard } from './router-standard/router-bootstrap-v34.mjs' // v1.18.3：测试面=运行面（agent.cordis.yml 挂载 -v34）
 import { apply as applySpec } from './router-spec/router-bootstrap-v10.mjs' // v1.18.3: 测试面=运行面（agent.cordis.yml 挂载 -v10）
-import { classifyTask, sessionMode } from './router-standard/router-core.mjs'
+import { classifyTask, sessionMode } from './router-standard/router-core-v34.mjs' // v1.21：测试面=运行面（agent.cordis.yml 挂载 -v34；此前误指 router-core.mjs 死快照）
 
 // ── minimal Cordis-shaped context ──────────────────────────────────────────
 
@@ -115,8 +115,8 @@ test('first request: RL persona + phase_begin as the only first-turn tool (v0.9)
 
   const { assembled, decision } = await runFirstStep(h, { message: build, session })
 
-  // v0.9 self-routed: RL persona + progressive disclosure gate —— 首轮只有 phase_begin
-  assert.match(assembled.sections.find((s) => s.name === 'router-persona').text, /^You are a helpful software engineer assistant\./)
+  // v1.21：persona 按 mode 档分发（此处 mode=react → REACT_PERSONA；此前硬编码恒为 SPEC 句）
+  assert.match(assembled.sections.find((s) => s.name === 'router-persona').text, /^You are a hands-on software engineer /)
   assert.ok(!assembled.sections.some((s) => s.name === 'router-stage'), 'stage section appears only after phase_begin/promotion')
   assert.deepEqual(assembled.tools.map((t) => t.name), ['phase_begin'])
   assert.deepEqual(assembled.contexts, [])
@@ -143,7 +143,10 @@ test('phase_begin injects the bootstrap guide exactly once and persists guided (
   const first = await begin.execute()
   assert.match(String(first), /session started/)
   assert.equal(appends.length, 1, 'bootstrap guide appended once')
-  assert.equal(appends[0].source.plugin, 'router-bootstrap')
+  assert.ok(
+    appends[0].source.kind === 'plugin:router-bootstrap' || appends[0].source.plugin === 'router-bootstrap',
+    'v4: guide carries plugin:router-bootstrap kind (legacy plugin field also accepted)',
+  )
   assert.match(appends[0].content[0].text, /Bootstrap \(once per session\)/)
   const again = await begin.execute()
   assert.match(String(again), /already started/)
@@ -168,6 +171,7 @@ test('plugin-origin claimed messages never pin the band or receive guides', asyn
   const decision = await h.preStep({ agent, messages: [approval, fix], turn: 1, step: 1 })
   // Classification comes from the REAL user message (plugin messages never pin the band)
   assert.equal(sessionMode({ events: [{ type: 'user/message', data: approval }] }), 'weak') // approval alone would be weak
+  // v1.21：persona 取 claimed 阶段捕获的首条真实用户文本（m4=修复 → spec），plugin approval 不参与分类
   assert.match(assembled.sections.find((s) => s.name === 'router-persona').text, /^You are a helpful software engineer assistant\./)
   assert.deepEqual(decision.messages.map((m) => m.id), ['a1', 'm4']) // no bootstrap guide for plugin-origin messages
 })
@@ -193,7 +197,8 @@ test('standard preset: after the first tool/call the router keeps the full surfa
   assert.ok(assembled.sections.some((s) => s.name === 'router-proactivity'), 'pressure guide persists after promotion')
   assert.deepEqual(assembled.contexts, [])
   assert.ok(assembled.tools.length === TOOLS.length, 'full tool catalog exposed')
-  assert.match(assembled.sections.find((s) => s.name === 'persona').text, /^You are a helpful software engineer assistant\.$/)
+  // v1.21：promoted 后按 mode 档替换 persona（此处 mode=react → REACT_PERSONA）
+  assert.match(assembled.sections.find((s) => s.name === 'persona').text, /^You are a hands-on software engineer /)
 })
 
 test('v1.18: catalog default = current tier only; query/all whitebox; help marks unlock stage', async () => {
@@ -398,7 +403,8 @@ test('no session/event listener: legacy emit is a no-op, never appends to the in
   h.agentRef.current = agent
   h.emit('session/event', session, { type: 'user/message', data: userMessage('m10', '今天天气怎么样') })
   const assembled = await h.assemble(baseAssembled(), { agent, scope: agent })
-  assert.match(assembled.sections.find((s) => s.name === 'router-persona').text, /^You are a helpful software engineer assistant\./)
+  // v1.21：该 session 无 durable 事件 → mode=weak + flash → WEAK_FLASH persona
+  assert.match(assembled.sections.find((s) => s.name === 'router-persona').text, /^You are a helpful assistant\./)
 })
 
 // ── dev tools register ─────────────────────────────────────────────────────
