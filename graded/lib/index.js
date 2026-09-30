@@ -63,9 +63,20 @@ function userMsg(text) {
   return {
     id: 'graded-' + Date.now() + '-' + Math.floor(Math.random() * 1e6),
     role: 'user',
-    source: { kind: 'plugin', plugin: 'dsh-graded-mode' },
+    source: { kind: 'plugin:dsh-graded-mode' },
     content: [{ type: 'text', text }],
   }
+}
+
+/** 判定一条消息是否由插件注入（非用户亲手所写）。
+ *  v4 会话格式拒绝 `kind: 'plugin'`（retired wrapper），本插件注入改用生产者自有 kind
+ *  `plugin:dsh-graded-mode`；这里同时兼容仍未升级的 v3 老会话。
+ *  注：**有意吞掉所有 `plugin:*` 生产者**（不只本插件）——它们都是系统通知（router 引导、
+ *  tool-goal 通知、审批上下文等），不代表用户意图；原生用户消息的 kind 恒为 `'user'`，
+ *  不会被这条判断误伤。 */
+function isInjectedByPlugin(m) {
+  const kind = m?.source?.kind
+  return kind === 'plugin' || (typeof kind === 'string' && kind.startsWith('plugin:'))
 }
 
 /** 在 decision.messages 里,最后一条 user 消息之后插入注入消息（前置位语义）。 */
@@ -88,7 +99,7 @@ function scanMode(messages) {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i]
     if (!m || m.role !== 'user') continue // 只扫用户消息：模型自报不生效为改口
-    if (m.source && m.source.kind === 'plugin') continue // 跳过本插件注入消息
+    if (isInjectedByPlugin(m)) continue // 跳过本插件注入消息
     let txt = ''
     for (const x of (m.content || [])) {
       if (x && typeof x === 'object' && x.type === 'text') txt += x.text || ''
@@ -475,7 +486,7 @@ export function apply(ctx, config) {
         for (let i = messages.length - 1; i >= 0; i--) {
           const m = messages[i]
           if (!m || m.role !== 'user') continue
-          if (m.source && m.source.kind === 'plugin') continue // 跳过本插件注入的 userMsg
+          if (isInjectedByPlugin(m)) continue // 跳过本插件注入的 userMsg
           let txt2 = ''
           for (const x of (m?.content || [])) {
             if (x && typeof x === 'object' && x.type === 'text') txt2 += x.text || ''

@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.0.1-rc1 + v4 消息源契约修复（2026-09-30）
+- **会话格式 v4 兼容**：v4 的消息源准入拒绝字面量 `source.kind === 'plugin'`（v3 退休写法；
+  本次在 DSH 0.2.0-rc.2 上复现）。插件注入引导即抛
+  `SessionFormatError: format v4 message requires a producer-owned source kind`，表现为「本轮运行失败」
+  ——分级模式一注入就断（commit_star 激活后、mark_task 续轮后各复现一次）。
+  四处注入点（`src/index.js` 的 `userMsg()`、`src/tools.js` 三处 steer）改用 v3→v4 迁移的兜底映射
+  `plugin:dsh-graded-mode`（`session-format-v3-to-v4/src/sources.ts`：`plugin:${plugin}`）。
+- **自跳过判断同步**：`kind === 'plugin'` → `isInjectedByPlugin()`（同时认退休字面量与 `plugin:*` 前缀，
+  与 router-core 的同类问题同源）。不改这处，新 kind 下插件自己注入的审核提示会被 review 文本扫描
+  当成用户回复（含「确认」→ 误推进阶段）。
+- 回归测试：`tests/v4-source-kind.test.mjs`（4 例；打补丁前 3 例红）。
+- 兼容性：**同时兼容 v3 / v4 宿主**。v3 原生的 `assertEvent(event, 3)` 只做结构校验后直接返回
+  （`session-format-v2-to-v3/src/payload.ts`），source-kind 白名单只作用于 **v2 迁移分类**，
+  因此 `plugin:dsh-graded-mode` 在 v3 宿主上同样可写。唯一附加要求在**消费侧**：过滤注入消息
+  要同时认 `plugin` 与 `plugin:*`（本 PR 已在 `graded` 内处理；`router-core` 的同类问题见上游 issue #143）。
+- 升级提示：安装副本需 `node scripts/build.mjs` 刷新 `lib/` 后**重启宿主**
+  （打包版不会热加载 node_modules 里的插件文件）。
+
 ## 0.0.1-rc1（2026-09-02）Release Candidate
 - 注入淤积根治：focus 幂等键去 status（状态抖动不再重注同名引导）；执行端续轮 followup→steer + 同 turn 60ms 引导合并（消除 next-turn 堆积）
 - 面板稳定：会话感知三级回退（URL/历史解析 ?sid=/盘 mtime）+防错显示；**设置面板闪退修复**（effect 一次挂载+回调 ref 化）

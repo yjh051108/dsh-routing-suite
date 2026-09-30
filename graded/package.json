@@ -43,6 +43,6 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node --test tests/mode-state.test.mjs tests/tools.test.mjs tests/inject-text.test.mjs"
+    "test": "node --test tests/mode-state.test.mjs tests/tools.test.mjs tests/inject-text.test.mjs tests/v4-source-kind.test.mjs"
   }
 }

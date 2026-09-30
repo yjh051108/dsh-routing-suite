@@ -320,7 +320,7 @@ export function lockStageDefinition(deps) {
           exec?.agent?.steer?.({
             id: 'graded-follow-' + Date.now() + '-' + Math.floor(Math.random() * 1e6),
             role: 'user', content: [{ type: 'text', text: phaseL2(cur.mode, loadConceptLimit(sid)) }],
-            source: { kind: 'plugin', plugin: 'dsh-graded-mode' },
+            source: { kind: 'plugin:dsh-graded-mode' },
           })
           registerInjected(sid, 'l2-guidance')
         } catch { /* 引导失败不阻断（不注册键 → pre-step 兜底补） */ }
@@ -358,7 +358,7 @@ export function lockStageDefinition(deps) {
             id: 'graded-follow-' + Date.now() + '-' + Math.floor(Math.random() * 1e6),
             role: 'user',
             content: [{ type: 'text', text: reviewPendingText() }],
-            source: { kind: 'plugin', plugin: 'dsh-graded-mode' },
+            source: { kind: 'plugin:dsh-graded-mode' },
           })
           registerInjected(sid, 'review-pending')
         } catch { /* 引导失败不阻断（不注册键 → pre-step 兜底补） */ }
@@ -483,7 +483,7 @@ export function markTaskDefinition(deps) {
                     id: 'graded-guide-' + Date.now() + '-' + Math.floor(Math.random() * 1e6),
                     role: 'user',
                     content: [{ type: 'text', text: p.msg }],
-                    source: { kind: 'plugin', plugin: 'dsh-graded-mode' },
+                    source: { kind: 'plugin:dsh-graded-mode' },
                   })
                   if (p.key) registerInjected(sid, p.key)
                 } catch { /* 投递失败不阻断（键未注册 → pre-step 兜底补） */ }
