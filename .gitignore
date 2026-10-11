@@ -7,3 +7,4 @@ preset/probe/dsh-2020-dataset/
 preset/probe/results/
 preset/probe/sessions/
 preset/probe/deepseek-tokenizer/
+.local/

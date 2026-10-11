@@ -21,7 +21,7 @@ import test from 'node:test'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { apply as applyStandard } from './router-standard/router-bootstrap-v34.mjs' // v1.18.3：测试面=运行面（agent.cordis.yml 挂载 -v34）
+import { apply as applyStandard, RL_PERSONA } from './router-standard/router-bootstrap-v34.mjs' // v1.18.3：测试面=运行面（agent.cordis.yml 挂载 -v34）
 import { apply as applySpec } from './router-spec/router-bootstrap-v10.mjs' // v1.18.3: 测试面=运行面（agent.cordis.yml 挂载 -v10）
 import { classifyTask, sessionMode } from './router-standard/router-core.mjs'
 
@@ -116,7 +116,7 @@ test('first request: RL persona + phase_begin as the only first-turn tool (v0.9)
   const { assembled, decision } = await runFirstStep(h, { message: build, session })
 
   // v0.9 self-routed: RL persona + progressive disclosure gate —— 首轮只有 phase_begin
-  assert.match(assembled.sections.find((s) => s.name === 'router-persona').text, /^You are a helpful software engineer assistant\./)
+  assert.ok(assembled.sections.find((s) => s.name === 'router-persona').text.startsWith(RL_PERSONA))
   assert.ok(!assembled.sections.some((s) => s.name === 'router-stage'), 'stage section appears only after phase_begin/promotion')
   assert.deepEqual(assembled.tools.map((t) => t.name), ['phase_begin'])
   assert.deepEqual(assembled.contexts, [])
@@ -168,7 +168,7 @@ test('plugin-origin claimed messages never pin the band or receive guides', asyn
   const decision = await h.preStep({ agent, messages: [approval, fix], turn: 1, step: 1 })
   // Classification comes from the REAL user message (plugin messages never pin the band)
   assert.equal(sessionMode({ events: [{ type: 'user/message', data: approval }] }), 'weak') // approval alone would be weak
-  assert.match(assembled.sections.find((s) => s.name === 'router-persona').text, /^You are a helpful software engineer assistant\./)
+  assert.ok(assembled.sections.find((s) => s.name === 'router-persona').text.startsWith(RL_PERSONA))
   assert.deepEqual(decision.messages.map((m) => m.id), ['a1', 'm4']) // no bootstrap guide for plugin-origin messages
 })
 
@@ -193,7 +193,7 @@ test('standard preset: after the first tool/call the router keeps the full surfa
   assert.ok(assembled.sections.some((s) => s.name === 'router-proactivity'), 'pressure guide persists after promotion')
   assert.deepEqual(assembled.contexts, [])
   assert.ok(assembled.tools.length === TOOLS.length, 'full tool catalog exposed')
-  assert.match(assembled.sections.find((s) => s.name === 'persona').text, /^You are a helpful software engineer assistant\.$/)
+  assert.equal(assembled.sections.find((s) => s.name === 'persona').text, RL_PERSONA)
 })
 
 test('v1.18: catalog default = current tier only; query/all whitebox; help marks unlock stage', async () => {
@@ -398,7 +398,7 @@ test('no session/event listener: legacy emit is a no-op, never appends to the in
   h.agentRef.current = agent
   h.emit('session/event', session, { type: 'user/message', data: userMessage('m10', '今天天气怎么样') })
   const assembled = await h.assemble(baseAssembled(), { agent, scope: agent })
-  assert.match(assembled.sections.find((s) => s.name === 'router-persona').text, /^You are a helpful software engineer assistant\./)
+  assert.ok(assembled.sections.find((s) => s.name === 'router-persona').text.startsWith(RL_PERSONA))
 })
 
 // ── dev tools register ─────────────────────────────────────────────────────
