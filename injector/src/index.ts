@@ -2524,42 +2524,128 @@ export function apply(ctx: AppContext, config: Config): void {
     },
   }))
 
+  /** 找 preset 声明行（id === 'preset-<presetId>'）——bundle 模式下 preset 由 profile bundle patch 声明。 */
+  function presetDeclEntry(presetId: string): any {
+    for (const entry of ctx.loader.entries()) {
+      const o = entry.options as { id?: string }
+      if (o?.id === 'preset-' + presetId) return entry
+    }
+    return undefined
+  }
+
+  /** 定位声明该 preset 行的 bundle patch 文件（profile 的 dsh.profile.bundles → 各包 dsh.bundle.patch → 文本含该 id 的那个）。 */
+  function bundlePatchFileForEntry(entry: any): string | undefined {
+    const filename = entry?.parent?.tree?.filename
+    if (!filename) return undefined
+    const profileDir = dirname(filename)
+    let manifest: any
+    try { manifest = JSON.parse(readFileSync(join(profileDir, 'package.json'), 'utf8')) } catch { return undefined }
+    const bundles: string[] = manifest?.dsh?.profile?.bundles ?? []
+    for (const bundleName of bundles) {
+      try {
+        const pkgFile = join(profileDir, 'node_modules', ...String(bundleName).split('/'), 'package.json')
+        if (!existsSync(pkgFile)) continue
+        const pkg = JSON.parse(readFileSync(pkgFile, 'utf8'))
+        const patch = pkg?.dsh?.bundle?.patch
+        const list: string[] = Array.isArray(patch) ? patch : (typeof patch === 'string' ? [patch] : [])
+        for (const rel of list) {
+          const abs = join(dirname(pkgFile), rel)
+          if (!existsSync(abs)) continue
+          let text = ''
+          try { text = readFileSync(abs, 'utf8') } catch { continue }
+          if (text.includes('id: ' + entry.options.id)) return abs
+        }
+      } catch { /* 单个 bundle 解析失败不阻塞其余 */ }
+    }
+    return undefined
+  }
+
+  /** 递归给 config.plugins（含 group 子行）里的包子路径 .mjs 加/增 ?v=N。 */
+  function bumpPluginQueries(plugins: any): { plugins: any[]; bumped: string[] } {
+    const bumped: string[] = []
+    const walk = (list: any): any[] => (Array.isArray(list) ? list : []).map((row: any) => {
+      if (!row || typeof row !== 'object') return row
+      const next = { ...row }
+      if (typeof next.name === 'string' && next.name.includes('.mjs')) {
+        const before = next.name
+        next.name = before.replace(/(\.mjs)(\?v=(\d+))?/g, (_w: string, ext: string, _q: string, d: string | undefined) => ext + '?v=' + (d === undefined ? 1 : Number(d) + 1))
+        if (next.name !== before) bumped.push(before + ' -> ' + next.name)
+      }
+      if (next.group && Array.isArray(next.config)) next.config = walk(next.config)
+      return next
+    })
+    return { plugins: walk(plugins), bumped }
+  }
+
+  /** 给文本里所有 .mjs?v=N 的 N 自增。 */
+  function bumpMjsQueryText(text: string): { text: string; bumped: string[] } {
+    const bumped: string[] = []
+    const next = String(text).replace(/(\.mjs)(\?v=)(\d+)/g, (_w: string, base: string, q: string, d: string) => {
+      bumped.push(base + q + d + ' -> ' + base + q + (Number(d) + 1))
+      return base + q + (Number(d) + 1)
+    })
+    return { text: next, bumped }
+  }
+
+  /** bundle 模式热重载：内存 bump → remove → create 重建声明行 entry（新 URL 绕 ESM 缓存）；patch 文件同步 bump 以持久化。 */
+  async function reloadPresetDecl(presetId: string): Promise<{ error?: string; patchFile?: string; bumped: string[]; fileBumped: string[] }> {
+    const entry = presetDeclEntry(presetId)
+    if (!entry) return { error: '未找到声明行 preset-' + presetId, bumped: [], fileBumped: [] }
+    const options = entry.options as { id?: string; name?: string; config?: any }
+    const { plugins, bumped } = bumpPluginQueries(options.config?.plugins)
+    if (!bumped.length) return { error: '声明中无 .mjs 包子路径（无需热更新）', bumped: [], fileBumped: [] }
+    const parent = entry.parent as any
+    if (!parent || typeof parent.remove !== 'function' || typeof parent.create !== 'function') {
+      return { error: 'entry 树不支持 remove/create（' + (parent?.constructor?.name ?? '?') + '）', bumped: [], fileBumped: [] }
+    }
+    const patchFile = bundlePatchFileForEntry(entry)
+    const fileBumped: string[] = []
+    if (patchFile) {
+      let before = ''
+      try { before = readFileSync(patchFile, 'utf8') } catch { before = '' }
+      if (before) {
+        const r = bumpMjsQueryText(before)
+        if (r.bumped.length) {
+          try { writeFileSync(patchFile, r.text, 'utf8'); fileBumped.push(...r.bumped) } catch { /* 持久化失败不阻塞热重载 */ }
+        }
+      }
+    }
+    try { parent.remove(options.id) } catch (e) { return { error: 'remove 失败：' + String(e), bumped, fileBumped } }
+    await ctx.loader.await()
+    try { await parent.create({ id: options.id, name: options.name, config: { ...(options.config ?? {}), plugins } }) } catch (e) {
+      return { error: 'create 失败：' + String(e), bumped, fileBumped }
+    }
+    await ctx.loader.await()
+    return { patchFile, bumped, fileBumped }
+  }
+
   safeRegister(defineTool({
     name: 'dev_reload_preset',
-    description: '预设热更新（agent-presets 新一代，绕 ESM 缓存）：给 .agent-presets/<preset>/agent.cordis.yml 的相对 .mjs 引用加 ?v=N query（N 自增）——组合文件指纹变化 → 新会话挂载新一代 → 新 URL 无缓存命中 → 改代码无需换文件名/重启即可生效。已运行会话保持旧代。',
+    description: '预设热更新（DSH 0.2.x bundle 模式，绕 ESM 缓存）：给 profile bundle 声明行里包子路径的 .mjs 加/增 ?v=N → remove+create 重建该 preset 声明行 entry → AgentPreset 重新 register（新 URL 无缓存命中）；patch 文件同步 bump 持久化。已运行会话用 dev_reload_preset_live / recompose 重链。',
     parameters: {
-      preset: { type: 'string', description: '预设 id（缺省 = 全部）' },
+      preset: { type: 'string', description: '预设 id（缺省 = loader 中全部 preset-* 声明行）' },
     },
     output: {
       schema: { type: 'string' },
       render: (_args: unknown, value: unknown) => [{ type: 'text', text: String(value) }],
     },
     async execute(args: { preset?: string }) {
-      const presetsRoot = join(dshHome, '.agent-presets')
-      const names = args.preset
-        ? [args.preset]
-        : (() => { try { return readdirSync(presetsRoot).filter((d) => !d.startsWith('.')) } catch { return [] } })()
-      if (!names.length) return 'ERROR: 未找到任何预设（' + presetsRoot + '）'
-      const out: string[] = []
-      for (const name of names) {
-        const ymlFile = join(presetsRoot, name, 'agent.cordis.yml')
-        if (!existsSync(ymlFile)) { out.push('[' + name + '] 无 agent.cordis.yml（跳过）'); continue }
-        let yml = ''
-        try { yml = readFileSync(ymlFile, 'utf8') } catch { out.push('[' + name + '] 读取失败（跳过）'); continue }
-        const refRe = /(name: \.\/[A-Za-z0-9._-]+\.mjs)(\?v=\d+)?/g
-        const refs = [...yml.matchAll(refRe)]
-        if (!refs.length) { out.push('[' + name + '] 无相对 .mjs 引用（无需热更新）'); continue }
-        const changed: string[] = []
-        for (const m of refs) {
-          const base = m[1]
-          const cur = m[2] ? Number(m[2].slice(3)) : 0
-          yml = yml.replace(m[0], base + '?v=' + (cur + 1))
-          changed.push(base.split('/').pop() + ' -> ?v=' + (cur + 1))
+      return withOpLock(async () => {
+        const ids = args.preset
+          ? [args.preset]
+          : [...ctx.loader.entries()]
+              .map((e) => (e.options as { id?: string }).id)
+              .filter((id): id is string => typeof id === 'string' && id.startsWith('preset-'))
+              .map((id) => id.slice('preset-'.length))
+        if (!ids.length) return 'ERROR: loader 中未找到任何 preset-* 声明行'
+        const out: string[] = []
+        for (const id of ids) {
+          const r = await reloadPresetDecl(id)
+          if (r.error) { out.push('[' + id + '] ' + r.error); continue }
+          out.push('[' + id + '] ' + r.bumped.join(', ') + (r.fileBumped.length ? '（patch 已同步）' : '（patch 未同步，仅本次生效）') + '  ← ' + (r.patchFile || '(未定位 patch)'))
         }
-        try { writeFileSync(ymlFile, yml, 'utf8') } catch { out.push('[' + name + '] 写入失败（跳过）'); continue }
-        out.push('[' + name + '] ' + changed.join(', '))
-      }
-      return 'OK: 预设热更新\n- ' + out.join('\n- ') + '\n注：新会话挂载新一代（新 URL 绕 ESM 缓存）；已运行会话保持旧代'
+        return 'OK: 预设热更新（bundle 模式）\n- ' + out.join('\n- ') + '\n注：remove+create 重建声明行 entry → AgentPreset 重新 register 出新一代（新 URL 绕 ESM 缓存）；已运行会话用 dev_reload_preset_live 重链本 agent'
+      })
     },
   }))
 

@@ -141,24 +141,33 @@ version of that external routing.
 
 ## Usage
 
-**Two presets** (v0.3.0; the router-pro line was retired): install one or more under `~/.dsh/.agent-presets/`:
+**Three presets** (v0.3.0; the router-pro line was retired): they ship inside the
+injector package and are declared as `preset-<id>` rows in the package's
+`cordis.patch.yml` (`dsh.bundle.patch`), so installing the suite package installs
+them all — **no copying into `.agent-presets`** (DSH 0.2.x no longer scans that
+directory):
 
 ```powershell
-# 标准路由预设（RL 接口还原，默认推荐）
-$target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-standard'
-Copy-Item -Recurse .\preset\router-standard $target
-
-# spec 路由预设（深度思考优先）
-$target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-spec'
-Copy-Item -Recurse .\preset\router-spec $target
+# 一条命令装齐注入器 + 三个路由预设（profile bundle 模式）
+dsh plugin --profile web add .            # 仓库根目录
+# desktop profile：用 GUI「插件」页，或注入器工具 dev_install_package
 ```
 
-**免重启安装（推荐）**：装好 [dsh-super-injector](https://github.com/yjh051108/dsh-super-injector)
-后（见套件 `scripts/install-injector.ps1`），改预设代码不再需要换文件名/重启：
+After a restart, pick **Router Standard (experimental)** (RL-interface, think-act
+loops), **Router Spec (experimental)** (deep-think-first, the long first-turn
+chain is the point) or **Router React (experimental)** (think-act loops) in a new
+session.
+
+**免重启安装（推荐）**：装好注入器后，改预设代码不再需要换文件名/重启：
 
 ```
-dev_reload_preset router-standard   # 预设热更新：?v=N query 绕 ESM 缓存，新会话立即用新代码
+dev_reload_preset router-standard   # bump 包内 cordis.patch.yml 的 ?v=N → 重建 preset 声明行 → 新代码生效
 ```
+
+（实现：改内存 config.plugins 里包子路径的 `?v=N`，再 `parent.remove(id)` +
+`parent.create(newOptions)` 重建 `preset-<id>` 声明行；旧代由 registry 的引用计数
+自动 collect。见 `dev_reload_preset_live`。）
+
 
 **注意事项（实测血泪）**：
 
@@ -179,7 +188,7 @@ dev_reload_preset router-standard   # 预设热更新：?v=N query 绕 ESM 缓�
 Restart DSH (or install via the suite script for zero-touch), start a new
 session, pick **Router Standard (experimental)** (RL-interface, think-act
 loops), **Router Spec (experimental)** (deep-think-first, the long first-turn
-chain is the point) or **Router Pro** (V4 Pro measured optimum).
+chain is the point) or **Router React (experimental)** (think-act loops).
 
 - `dev_router_status` — current mode, band, persona, core tools, override state
 - `dev_router_mode <spec|weak|mixed|react|0-100|0.0-1.0|auto>` — explicit mode

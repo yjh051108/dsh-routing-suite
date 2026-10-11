@@ -23,44 +23,34 @@ speced plan → check-in → group close-out → final check, with redteam gate 
 | **preset** | Reasoning-mode routing presets (router-standard / router-spec, persona-based routing) | [preset/README.md](preset/README.md) · [experiments](preset/docs/experiments.md) |
 | **graded** | Graded mode: session-level two-level task protocol (6 tools + 3 modes + per-item mode + redteam gate + audit endpoint + super panel) | [graded/README.md](graded/README.md) · [ARCHITECTURE](graded/docs/ARCHITECTURE.md) · [THEORY](graded/docs/THEORY.md) · [DATA](graded/docs/DATA.md) |
 
-## Install chain (three steps)
+## Install (DSH 0.2.x: profile bundle)
 
 ```powershell
 # 1. Clone the suite (single repo: injector/preset content is stored directly, no submodules)
 git clone https://github.com/yjh051108/dsh-routing-suite.git
 cd dsh-routing-suite
 
-# 2. One-shot install (injector assembly + preset copy + layout self-check + restart prompt)
-.\install.ps1
+# 2. Install into a profile (injector + all three router presets in one shot)
+#    web/headless/... use the CLI; the desktop profile is owned by Electron — use the GUI Plugins page
+dsh plugin --profile web add .
+# If dsh is not on PATH: npx '@deepseek-ai/dsh' plugin --profile web add .
 ```
 
-Or manually:
+> Since DSH 0.2.x, agent presets are **no longer** discovered by scanning `$DSH_HOME/.agent-presets/`.
+> A preset is declared as `preset-<id>` in the package's `cordis.patch.yml` (`dsh.bundle.patch`) and
+> mounted with the profile bundle — installing the package installs the presets. **Do not copy anything
+> into `.agent-presets`.** For the desktop profile, `dsh plugin` is rejected by the Electron app: install
+> the repo directory/tgz from the GUI Plugins page, or use the injector's `dev_install_package`.
 
-```powershell
-# Step 1: assemble the injector (official assembly; bundles take over after restart)
-dsh plugin --profile web add .\injector
-# If dsh is not on PATH (npx @deepseek-ai/dsh web): npx '@deepseek-ai/dsh' plugin --profile web add .\injector
+**DSH Target**: `>=0.1.0-rc.6 <0.3.0` (0.2.x verified: bundle mount + preset registration pass).
 
-# Step 2: install the router presets (one or both; DSH scans one level only,
-# so each preset directory must sit FLAT under .agent-presets)
-$target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-standard'
-Copy-Item -Recurse .\preset\router-standard $target
-
-$target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-spec'
-Copy-Item -Recurse .\preset\router-spec $target
-
-# Step 3: restart DSH → pick Router Standard / Router Spec in a new session
-```
-
-> Do NOT copy the `preset` directory as a whole — the extra nesting hides the
-> presets from DSH discovery.
 
 ## Components
 
 | Path | Repo | Version | Role |
 |---|---|---|---|
 | `injector/` | [dsh-super-injector](https://github.com/yjh051108/dsh-super-injector) | [v0.3.3](https://github.com/yjh051108/dsh-super-injector/releases/tag/v0.3.3) | Runtime injector: dev_* tool family (inject / hot-reload / staging-promote / uninject / route self-heal); git installs build automatically (prepare hook) |
-| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [v0.3.0 … mainline v1.19.1/v34](https://github.com/yjh051108/dsh-router-standard/releases/tag/v0.3.0) | Reasoning-mode routing presets: router-standard (classified persona + full sections) / router-spec (deep-think-first). router-pro is planned but NOT part of v0.3.0 |
+| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [v0.3.0 … mainline v1.19.1/v34](https://github.com/yjh051108/dsh-router-standard/releases/tag/v0.3.0) | Reasoning-mode routing presets: router-standard (classified persona + full sections) / router-spec (deep-think-first) / router-react (think-act loops). router-pro is planned but NOT part of v0.3.0 |
 | `graded/` | [dsh-graded-mode](https://github.com/yjh051108/dsh-routing-suite/tree/main/graded) | [v3.2.0](https://github.com/yjh051108/dsh-routing-suite/releases) | Graded mode: session-level two-level task protocol (brainstorm quiz alignment → North-Star finalization → speced plan → spec-driven injection → check-in → group close-out → final check); 6 tools + 3 modes + per-item mode + redteam gate + audit endpoint; `graded/dsh-graded-mode-3.2.0.tgz` is a direct `dsh plugin --profile web add` target |
 
 > Versions follow each component repo's git tag (links go to the matching Release).

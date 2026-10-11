@@ -19,7 +19,7 @@ import {
 } from './router-core-v34.mjs'
 import { join, dirname } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
-import { pathToFileURL } from 'node:url'
+import { pathToFileURL, fileURLToPath } from 'node:url'
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync, readdirSync, rmSync } from 'node:fs'
 import vm from 'node:vm'
 
@@ -592,6 +592,106 @@ function applyStageRestrict(agent, stage) {
   } catch (e) { console.error('[router-bootstrap] applyStageRestrict failed:', e); /* scope-local names in allow: skip restrict, keep full catalog */ }
 }
 
+// ── bundle 模式热重载助手（DSH 0.2.x：agent preset 由 profile bundle patch 声明，
+//    不再有 $DSH_HOME/.agent-presets/ 目录扫描。bundle patch 在 boot 时被读成 layer 并
+//    合并进 profile 根 include 的 patches，运行期没有镜像、也没有文件监听，所以
+//    refresh 重读的是空 cordis.yml —— 改 patch 文件无法热重载。
+//    实测唯一可行路径：把声明行 config.plugins 里包子路径的 .mjs 加/增 ?v=N
+//    （新 URL 绕 ESM 缓存），再 remove → create 重建该 preset 声明行 entry，让 AgentPreset
+//    重新 register 出新一代；同时把 patch 文件里的 ?v=N 一并 bump 以持久化）──
+function presetEntryFor(ctx, presetId) {
+  const loader = ctx.get('loader')
+  if (!loader || typeof loader.entries !== 'function') return undefined
+  const wanted = 'preset-' + String(presetId)
+  for (const entry of loader.entries()) {
+    if (entry && entry.options && entry.options.id === wanted) return entry
+  }
+  return undefined
+}
+
+/** 定位声明该 preset 行的 bundle patch 文件（扫 profile 的 dsh.profile.bundles → 各包 dsh.bundle.patch → 含本行 id 的那个）。 */
+function bundlePatchFileFor(entry) {
+  const filename = entry && entry.parent && entry.parent.tree && entry.parent.tree.filename
+  if (!filename) return undefined
+  const profileDir = dirname(filename)
+  let manifest
+  try { manifest = JSON.parse(readFileSync(join(profileDir, 'package.json'), 'utf8')) } catch { return undefined }
+  const bundles = (manifest && manifest.dsh && manifest.dsh.profile && manifest.dsh.profile.bundles) || []
+  for (const bundleName of bundles) {
+    try {
+      const pkgFile = join(profileDir, 'node_modules', ...String(bundleName).split('/'), 'package.json')
+      if (!existsSync(pkgFile)) continue
+      const pkg = JSON.parse(readFileSync(pkgFile, 'utf8'))
+      const patch = pkg && pkg.dsh && pkg.dsh.bundle && pkg.dsh.bundle.patch
+      const list = Array.isArray(patch) ? patch : (typeof patch === 'string' ? [patch] : [])
+      for (const rel of list) {
+        const abs = join(dirname(pkgFile), rel)
+        if (!existsSync(abs)) continue
+        let text = ''
+        try { text = readFileSync(abs, 'utf8') } catch { continue }
+        if (text.includes('id: ' + entry.options.id)) return abs
+      }
+    } catch { /* 单个 bundle 解析失败不阻塞 */ }
+  }
+  return undefined
+}
+
+/** 给文本里所有 `.mjs?v=N` 的 N 自增（无 query 的不动）。 */
+function bumpMjsQuery(text) {
+  const bumped = []
+  const next = String(text).replace(/(\.mjs)(\?v=)(\d+)/g, (whole, base, q, d) => {
+    bumped.push(base + q + d + ' -> ' + base + q + (Number(d) + 1))
+    return base + q + (Number(d) + 1)
+  })
+  return { text: next, bumped }
+}
+
+/** 递归给 config.plugins（含 group 子行）里的包子路径加/增 ?v=N。 */
+function bumpPluginQueries(plugins) {
+  const bumped = []
+  const walk = (list) => (Array.isArray(list) ? list : []).map((row) => {
+    if (!row || typeof row !== 'object') return row
+    const next = { ...row }
+    if (typeof next.name === 'string' && next.name.includes('.mjs')) {
+      const before = next.name
+      next.name = before.replace(/(\.mjs)(\?v=(\d+))?/g, (whole, ext, q, d) => ext + '?v=' + (d === undefined ? 1 : Number(d) + 1))
+      if (next.name !== before) bumped.push(before + ' -> ' + next.name)
+    }
+    if (next.group && Array.isArray(next.config)) next.config = walk(next.config)
+    return next
+  })
+  return { plugins: walk(plugins), bumped }
+}
+
+/** bundle 模式热重载：内存 bump → remove → create 重建声明行 entry → 新 URL 绕 ESM 缓存。返回 {patchFile,bumped,fileBumped} 或 {error}。 */
+async function reloadPresetFromBundle(ctx, presetId) {
+  const entry = presetEntryFor(ctx, presetId)
+  if (!entry) return { error: '未找到 preset 声明行 preset-' + presetId + '（非 bundle 模式？）' }
+  const options = entry.options || {}
+  const { plugins, bumped } = bumpPluginQueries(options.config && options.config.plugins)
+  if (!bumped.length) return { error: 'preset 声明中无 .mjs 包子路径（无需热更新）' }
+  const parent = entry.parent
+  if (!parent || typeof parent.remove !== 'function' || typeof parent.create !== 'function') {
+    return { error: 'entry 树不支持 remove/create（' + (parent && parent.constructor && parent.constructor.name) + '）' }
+  }
+  const patchFile = bundlePatchFileFor(entry)
+  let fileBumped = []
+  if (patchFile) {
+    let before = ''
+    try { before = readFileSync(patchFile, 'utf8') } catch { before = '' }
+    if (before) {
+      const r = bumpMjsQuery(before)
+      if (r.bumped.length) { try { writeFileSync(patchFile, r.text, 'utf8'); fileBumped = r.bumped } catch { /* 持久化失败不阻塞热重载 */ } }
+    }
+  }
+  try { parent.remove(options.id) } catch (e) { return { error: 'remove 失败：' + String(e) } }
+  await ctx.get('loader')?.await?.()
+  try {
+    await parent.create({ id: options.id, name: options.name, config: { ...(options.config || {}), plugins } })
+  } catch (e) { return { error: 'create 失败：' + String(e) } }
+  await ctx.get('loader')?.await?.()
+  return { patchFile, bumped, fileBumped, presetId }
+}
 export function apply(ctx, config) {
   try { mkdirSync(join(process.env.DSH_HOME || homedir(), 'router-standard'), { recursive: true }); writeFileSync(join(process.env.DSH_HOME || homedir(), 'router-standard', 'last-mount.txt'), 'new-gen v0.8 ' + new Date().toISOString(), 'utf8') } catch { /* marker */ }
   // 运行环境修整：① node 进 PATH（harness 的 node 在自定义运行时目录，不在系统 PATH——v1.5 实测
@@ -1083,7 +1183,7 @@ export function apply(ctx, config) {
 
     n += make({
       name: 'dev_reload_preset_live',
-      description: '预设热重载（当前会话即时生效；own-layer shim 版）。',
+      description: '预设热重载（当前会话即时生效；own-layer shim 版）：给本 bundle 声明行里包子路径的 .mjs 加/增 ?v=N → remove+create 重建声明行 entry（新 URL 绕 ESM 缓存）→ recompose。',
       parameters: { targetSessionId: { type: 'string', description: '目标会话 id（缺省 = 当前会话）' } },
       execute: async (shimArgs) => {
         const ap2 = ctx.get('agentPresets')
@@ -1092,23 +1192,13 @@ export function apply(ctx, config) {
         const targetSid2 = shimArgs?.targetSessionId || target2.session?.id || sid
         const before2 = ap2.composedPreset(target2.ctx) ?? 'unknown'
         if (before2 === 'unknown') return 'ERROR: 未加入预设'
-        const ymlFile2 = join(process.env.DSH_HOME || homedir(), '.agent-presets', before2, 'agent.cordis.yml')
-        let yml2 = ''
-        try { yml2 = readFileSync(ymlFile2, 'utf8') } catch (e) { return 'ERROR: 读取失败 ' + String(e) }
-        const refRe2 = /(name: \.\/[A-Za-z0-9._-]+\.mjs)(\?v=\d+)?/g
-        const b2 = []
-        yml2 = yml2.replace(refRe2, (whole, base, query) => {
-          const cur = query ? Number(query.slice(3)) : 0
-          b2.push(base.split('/').pop() + '->?v=' + (cur + 1))
-          return base + '?v=' + (cur + 1)
-        })
-        if (!b2.length) return 'ERROR: 无相对 .mjs 引用'
-        writeFileSync(ymlFile2, yml2, 'utf8')
+        const res2 = await reloadPresetFromBundle(ctx, before2)
+        if (res2.error) return 'ERROR: ' + res2.error
         const stage2 = ensureStage()[targetSid2]?.stage ?? 0
         await ap2.recompose(target2.ctx, before2)
         applyStageRestrict(target2, stage2)
         const shimN = installMetaShim(target2)
-        return 'OK: shim live reloaded\n- bump: ' + b2.join(', ') + '\n- before=' + before2 + ' after=' + (ap2.composedPreset(target2.ctx) ?? before2) + '\n- shim=' + shimN
+        return 'OK: shim live reloaded (bundle)\n- patch: ' + (res2.patchFile || '(未定位)') + '\n- bump: ' + res2.bumped.join(', ') + '\n- before=' + before2 + ' after=' + (ap2.composedPreset(target2.ctx) ?? before2) + '\n- shim=' + shimN
       },
     })
 
@@ -1225,7 +1315,7 @@ export function apply(ctx, config) {
 
   registerTool({
     name: 'dev_reload_preset_live',
-    description: '预设热重载（当前会话即时生效）：bump agent.cordis.yml 相对 .mjs 的 ?v=N → AgentPresets.recompose 把本 agent 重链到新 generation。仅在同预设自身向前兼容升级时使用（否则已记录工具调用可能在新代不可见）。',
+    description: '预设热重载（当前会话即时生效）：给本 bundle 声明行里包子路径的 .mjs 加/增 ?v=N → remove+create 重建声明行 entry（新 URL 绕 ESM 缓存，AgentPreset 重新 register）→ AgentPresets.recompose 把本 agent 重链到新 generation。仅在同预设自身向前兼容升级时使用（否则已记录工具调用可能在新代不可见）。',
     parameters: { targetSessionId: { type: 'string', description: '目标会话 id（缺省 = 当前会话）' } },
     output: { schema: { type: 'string' }, render: (_a, v) => [{ type: 'text', text: String(v) }] },
     async execute(args) {
@@ -1241,29 +1331,15 @@ export function apply(ctx, config) {
       if (!ap || !agent) return 'ERROR: agentPresets/agent 不可用 (target=' + label + ')'
       const before = ap.composedPreset(agent.ctx) ?? 'unknown'
       if (before === 'unknown') return 'ERROR: 当前 agent 未加入预设'
-      const home = process.env.DSH_HOME || homedir()
-      const presetDir = join(home, '.agent-presets', before)
-      const ymlFile = join(presetDir, 'agent.cordis.yml')
-      let yml = ''
-      try { yml = readFileSync(ymlFile, 'utf8') } catch (e) { return 'ERROR: 读取失败 ' + ymlFile + ' ' + String(e) }
-      const refRe = /(name: \.\/[A-Za-z0-9._-]+\.mjs)(\?v=\d+)?/g
-      let bumped = []
-      let matched = false
-      yml = yml.replace(refRe, (whole, base, query) => {
-        matched = true
-        const cur = query ? Number(query.slice(3)) : 0
-        bumped.push(base.split('/').pop() + ' -> ?v=' + (cur + 1))
-        return base + '?v=' + (cur + 1)
-      })
-      if (!matched) return 'ERROR: 无相对 .mjs 引用'
-      writeFileSync(ymlFile, yml, 'utf8')
+      const res = await reloadPresetFromBundle(ctx, before)
+      if (res.error) return 'ERROR: ' + res.error
       const targetSid = (args && args.targetSessionId) || currentSession()?.id || agent.session?.id || ''
       const stage = ensureStage()[targetSid]?.stage ?? 0
       const preset = await ap.recompose(agent.ctx, before)
       applyStageRestrict(agent, stage)
       const after = ap.composedPreset(agent.ctx) ?? preset?.id ?? 'unknown'
       const shimN = installMetaShim(agent)
-      return 'OK: live reloaded\n- bump: ' + bumped.join(', ') + '\n- before: ' + before + '\n- after: ' + after + '\n- shim: ' + shimN + '\n本工具调用仍跑在旧代；下一轮请求即挂载新一代。'
+      return 'OK: live reloaded (bundle)\n- patch: ' + (res.patchFile || '(未定位)') + '\n- bump: ' + res.bumped.join(', ') + '\n- before: ' + before + '\n- after: ' + after + '\n- shim: ' + shimN + '\n本工具调用仍跑在旧代；下一轮请求即挂载新一代。'
     },
   })
 

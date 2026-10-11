@@ -42,7 +42,7 @@ $PackageDir = (Resolve-Path $PackageDir).Path
 
 # DSH 安装根（npm 全局）与 profile
 $npmRoot = $null
-$appDataCands = @($env:APPDATA, (Join-Path $env:USERPROFILE 'AppData\Roaming'), 'C:\Users\Eldwen\AppData\Roaming', 'C:\Users\Administrator\AppData\Roaming') | Select-Object -Unique
+$appDataCands = @($env:APPDATA, (Join-Path $env:USERPROFILE 'AppData\Roaming')) | Where-Object { $_ } | Select-Object -Unique
 foreach ($ad in $appDataCands) {
   $cand = Join-Path $ad 'npm\node_modules'
   if (Test-Path (Join-Path $cand '@deepseek-ai\dsh')) { $npmRoot = $cand; break }

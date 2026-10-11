@@ -17,34 +17,36 @@
 >
 > 相关演进见 `CHANGELOG.md`；核心机制判断见 `docs/` 与归档 `核心机制反馈-v123-优化方向.md`。
 
-> `dsh-routing-suite/preset` = 路由预设源码仓库（子模块），含三大预设：
+> `dsh-routing-suite/preset` = 路由预设源码目录（仓库内普通目录），含三大预设：
 > **router-standard（v34，主力）** / **router-react（v17）** / **router-spec（v10)**。
 > 本文档给 agent/开发者：怎么改、怎么验、怎么同步到 DSH、怎么生效。
 > 权威规范（哲学/设计）见 `README.md` 与 `docs/`；演进史见 `CHANGELOG.md`。
 
-## 开发链路全貌
+## 开发链路全貌（DSH 0.2.x · bundle 模式）
 
 ```
-改源码(无版本别名) → selftest 就地验证 → 同步脚本 → 运行目录(版本快照) → dev_reload → DSH 生效
+改源码(无版本别名) → selftest 就地验证 → sync-preset 同步带版本快照 + bump patch ?v=N → dev_reload_preset → DSH 生效
 ```
 
-每个预设都是「**源码 = 编辑基准，运行目录 = 版本快照**」：
+DSH 0.2.x 起 agent preset **不再从 `~/.dsh/.agent-presets/` 目录扫描加载**（该目录已无任何读取方）。
+预设改为由包的 `cordis.patch.yml`（`dsh.bundle.patch`）以 `preset-<id>` 声明，随 profile bundle 装载：
 
-| 预设 | 源码目录(preset/preset/) | 运行目录(~/.dsh/.agent-presets/) | 当前版本 |
-|---|---|---|---|
-| router-standard | `router-standard/` | `router-standard-v22/` | v34 |
-| router-react | `router-react/` | `router-react/` | v17 |
-| router-spec | `router-spec/` | `router-spec/` | v10 |
+| 预设 | 源码目录(`preset/`) | patch 声明 id | bootstrap 包子路径 | 当前版本 |
+|---|---|---|---|---|
+| router-standard | `router-standard/` | `preset-router-standard` | `@dsh-external/dsh-super-injector/preset/router-standard/router-bootstrap-v34.mjs?v=88` | v34 |
+| router-react | `router-react/` | `preset-router-react` | `.../preset/router-react/router-bootstrap-v17.mjs` | v17 |
+| router-spec | `router-spec/` | `preset-router-spec` | `.../preset/router-spec/router-bootstrap-v10.mjs` | v10 |
 
-> ⚠️ **运行目录名只是历史遗留**：`router-standard-v22` 里的 `v22` 是旧目录名，**内容是 v34**（agent.cordis.yml 指 `-v34`）。改名会有风险，勿动目录名。
+> 声明文件 = 仓库根 `cordis.patch.yml`；安装后同一份文件在 profile 的
+> `node_modules/@dsh-external/dsh-super-injector/cordis.patch.yml`。
 
 ## 编辑基准（改哪里）
 
 **改源码目录的无版本别名**，不是带版本号文件：
 
-- `preset/preset/router-standard/router-bootstrap.mjs` ← 主编辑对象
-- `preset/preset/router-standard/router-core.mjs` ← 路由逻辑
-- `preset/preset/router-standard/agent.cordis.yml` ← 装配配置（persona/sections/工具行）
+- `preset/router-standard/router-bootstrap.mjs` ← 主编辑对象
+- `preset/router-standard/router-core.mjs` ← 路由逻辑
+- `preset/router-standard/agent.cordis.yml` ← 装配配置（persona/sections/工具行）
 - 源码里**无版本别名** == 带版本 `-v34.mjs`（一致），无版本别名是纯源，`-v34` 是同步生成的快照。
 
 > 三个文件常联动改：bootstrap（机制）+ core（逻辑）+ agent.cordis.yml（工具面/版本戳）。
@@ -54,20 +56,20 @@
 ```bash
 # 源码目录即可验证（selftest 已同步进源码）：
 node preset/router-standard/router-bootstrap-v34.selftest.mjs   # → SELFTEST PASS
-# 或完整测试（依赖 node，来自 Eldwen 用户 nvm）：
-# node --test router.test.mjs   # 单元测试
+# 或完整测试：
+node --test preset/router.test.mjs
 ```
 
 ## 同步到 DSH（让改动能跑）
 
 ```bash
-node scripts/sync-preset.cjs router-standard          # 复制 bootstrap/core/agent.cordis/preset/selftest → 运行目录 + 跑 selftest
-node scripts/sync-preset.cjs router-standard --bump   # + 递增 ?v=N（绕 ESM 缓存）
-node scripts/sync-preset.cjs router-react | router-spec
+node preset/scripts/sync-preset.cjs router-standard          # 以无版本别名重生成 router-bootstrap-vN.mjs + router-core-vN.mjs，并跑 selftest
+node preset/scripts/sync-preset.cjs router-standard --bump   # + 递增根 cordis.patch.yml 里的 ?v=N（绕 ESM 缓存）
+node preset/scripts/sync-preset.cjs router-react             # | router-spec
 ```
 
 - 同步脚本替代 `routing-probe/sync-*-v*.cjs` 那些散落脚本（已废弃）。
-- **`--bump` 在改完 agent.cordis.yml/需要 DSH 加载新代码时用**（递增源码+运行目录双侧 `?v=N`，保持一致）。
+- **`--bump` 在改完 bootstrap/core 后必用**：ESM 按 URL 缓存，`?v=N` 不变则新代码不会被加载。
 
 ## 生效（DSH 加载新代码）
 
@@ -75,20 +77,24 @@ DSH 用 ESM 按 URL 缓存模块，**原地覆盖不生效**，需绕缓存：
 
 ```bash
 # 会话里对模型说（注入器提供）：
-dev_reload_preset router-standard    # ?v=N query 变化 → 新会话立即用新代码
+dev_reload_preset router-standard    # bump 包内 patch 的 ?v=N → 重建 preset 声明行 → 新会话立即用新代码
 ```
 
-> 若 `?v=N` 未变，DSH 内存里还是旧代码。**bump 必须同时改源码 & 运行目录**（脚本 `--bump` 已做）。
+> 实现：改内存 `config.plugins` 里包子路径的 `?v=N` → `parent.remove(id)` + `parent.create(newOptions)`
+> 重建 `preset-<id>` 声明行（`dispose+update` 与 `Include.refresh()` 均无效，已实测）；patch 文件同步 bump 以持久化。
+
 
 ## 关键坑（实测血泪）
 
-1. **`.dsh` 根目录错位**：shell 里 `USERPROFILE/HOME=Administrator`，但 DSH 真实 profile/运行目录在 **`C:\Users\Eldwen`**。
-   同步脚本已显式用 `DSH_HOME || 'C:\\Users\\Eldwen'`，**勿改成走 `USERPROFILE`**（会让你同步到错误路径）。
+1. **不再有「运行目录」**：0.2.x 下没有 `.agent-presets` 目录可同步。sync-preset 只改仓库内文件
+   （`preset/<name>/` + 根 `cordis.patch.yml`），安装位置由 profile bundle 决定
+   （`<profile>/node_modules/@dsh-external/dsh-super-injector/`）。旧脚本里的 `DSH_HOME` 与作者机器路径
+   硬编码已删除——**不要再引入任何硬编码 profile 路径**。
 2. **ESM 缓存**：改代码必须 `--bump` + `dev_reload_preset`，否则不生效。
 3. **无版本别名 ≠ 历史**：源码的 `router-bootstrap.mjs`/`router-core.mjs` 是**当前版兼容别名**（probe/测试引用），
    不是历史文件。**勿删、勿移**。真正历史版本在 `docs/archive/`（react v1-8/spec v1）。
-4. **历史版本堆积**：运行目录旧版本文件已在 `_archive_versions/`（v22-v33），源码只存当前版。
-   若再堆积，用 `_archive_versions/` 方式归档而非删除。
+4. **历史版本堆积**：旧版本按 `docs/archive/` 方式归档（react v1-v8 / spec v1 已在那里），源码只存当前版。
+   新归档照此办理，勿在 preset 目录里堆 `_archive_versions/`。
 
 ## 版控边界（.gitignore）
 
@@ -104,7 +110,7 @@ dev_reload_preset router-standard    # ?v=N query 变化 → 新会话立即用�
 # 2. 就地验证
 node preset/router-standard/router-bootstrap-v34.selftest.mjs
 # 3. 同步到 DSH（带 bump 绕缓存）
-node scripts/sync-preset.cjs router-standard --bump
+node preset/scripts/sync-preset.cjs router-standard --bump
 # 4. DSH 会话里 reload
 dev_reload_preset router-standard
 ```

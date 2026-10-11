@@ -22,61 +22,39 @@
 - [🧪 测量工具](graded/scripts/measure.mjs)——`node scripts/measure.mjs 你的会话.jsonl`：任何人可对自己会话复算上述指标（脱敏：只输出数字）
 - [📁 实测数据](graded/docs/DATA.md)——三会话脱敏指标表+懈怠强度表+审计口径
 
-## 一键安装
+## 安装（DSH 0.2.x：profile bundle）
 
 ```powershell
-dsh plugin --profile web add github:yjh051108/dsh-routing-suite
-```
-
-> 本套装已含上述三组件（injector/preset/graded 均为仓库内普通目录，内容直接入库）；
-> graded 发布物：`graded/dsh-external-dsh-graded-mode-0.0.1-rc1.tgz`（或 Release 附件）。
-
-**DSH Target**：`>=0.1.0-rc.6 <0.2.0`（已跟进 rc.8 / 0.1.1-rc.2 / 0.1.2-alpha.1）
-
-> DSH 目前处于 developer preview，官方明示会有破坏性变更（breaking changes）。
-> 本仓库的版本跟进记录见 `preset/CHANGELOG.md`。
-
-## 安装链（三步）
-
-```powershell
-# 1. 拉套装（单仓库：injector/preset 内容已直接入库，无需 submodule）
+# 1. 拉套装（单仓库：injector/preset 内容已直接入库）
 git clone https://github.com/yjh051108/dsh-routing-suite.git
 cd dsh-routing-suite
 
-# 2. 一键安装（注入器装配 + 预设复制 + 布局自检 + 提示重启）
-.\install.ps1
+# 2. 装进 profile（注入器 + 三个 router preset 一次装好）
+#    web/headless 等 profile 用 CLI；desktop profile 由 Electron 独占，用 GUI「插件」页
+dsh plugin --profile web add .
+# dsh 不在 PATH 时：npx '@deepseek-ai/dsh' plugin --profile web add .
 ```
 
-或手动：
+> DSH 0.2.x 起 agent preset 不再从 `$DSH_HOME/.agent-presets/` 目录扫描加载——
+> preset 由包的 `cordis.patch.yml`（`dsh.bundle.patch`）以 `preset-<id>` 声明，
+> 随 profile bundle 一起装载。装包即装预设，**不要再复制到 `.agent-presets`**。
+> desktop profile 的 `dsh plugin` 被 Electron 独占，请在 GUI「插件」页安装本仓库目录/tgz，
+> 或用注入器工具 `dev_install_package`。
 
-```powershell
-# 步骤 1：装配注入器（官方装配，重启后由 bundles 接管）
-dsh plugin --profile web add .\injector
-# dsh 不在 PATH 时：npx '@deepseek-ai/dsh' plugin --profile web add .\injector
-
-# 步骤 2：安装 router 预设（每个预设目录平铺复制到 .agent-presets 下，DSH 只扫一级子目录）
-$target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-standard'
-Copy-Item -Recurse .\preset\router-standard $target
-
-$target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-spec'
-Copy-Item -Recurse .\preset\router-spec $target
-
-# 步骤 3：重启 DSH → 新会话选择 Router Standard / Router Spec (experimental)
-```
-
-> 注意：不要复制 `preset` 整目录（会多套一层，DSH 发现不了预设）。
+**DSH Target**：`>=0.1.0-rc.6 <0.3.0`（0.2.x 已实测：bundle 装载 + preset 注册通过）
 
 ## 组件
 
 | 路径 | 仓库 | 版本 | 作用 |
 |---|---|---|---|
-| `injector/` | [dsh-super-injector](https://github.com/yjh051108/dsh-super-injector) | [v0.3.3](https://github.com/yjh051108/dsh-super-injector/releases/tag/v0.3.3) | 运行时注入器：dev_* 工具全家桶（注入/热重载/侧挂转正/卸载/路由自愈）；`github:` 装配由 prepare 钩子自动构建 |
-| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [v0.3.0 … 主线 v1.19.1/v34](https://github.com/yjh051108/dsh-router-standard/releases/tag/v0.3.0) | 思维模式路由预设：router-standard（分类 persona + 完整 sections）/ router-spec（深度思考优先）。router-pro 为规划中（planned），未随 v0.3.0 发布 |
+| `injector/` | [dsh-super-injector](https://github.com/yjh051108/dsh-super-injector) | [v0.3.3](https://github.com/yjh051108/dsh-super-injector/releases/tag/v0.3.3) | 运行时注入器：dev_* 工具全家桶（注入/热重载/侧挂转正/卸载/路由自愈） |
+| `preset/` | [dsh-router-standard](https://github.com/yjh051108/dsh-router-standard) | [v0.3.0 … 主线 v1.19.1/v34](https://github.com/yjh051108/dsh-router-standard/releases/tag/v0.3.0) | 思维模式路由预设：router-standard（分类 persona + 完整 sections）/ router-spec（深度思考优先）/ router-react（think-act） |
 | `graded/` | [dsh-graded-mode](https://github.com/yjh051108/dsh-routing-suite/tree/main/graded) | [v0.0.1-rc1](https://github.com/yjh051108/dsh-routing-suite/releases/tag/v0.0.1-rc1) | graded 模式：会话级两级任务协议（脑暴选择题对齐 → 北极星定稿 → 规格化计划 → 按规格注入 → 打卡制 → 组收官 → 终验）；6 工具 + 三模式 + 小类模式粒度 + 红队门 + 审计端点；`graded/dsh-graded-mode-3.2.0.tgz` 可直接 `dsh plugin --profile web add` |
 
 > 版本号以各组件仓库的 git tag 为准（列内链接直达对应 Release）。
 
-三个组件随本仓库统一演进（`injector/`、`preset/` 与 `graded/` 已是仓库内普通目录，内容直接入库）；上游独立仓库保留用于独立发布，后续可转镜像/归档。预设安装目录为 `preset/router-standard`（已平铺，无额外嵌套）。
+三个组件随本仓库统一演进（`injector/`、`preset/` 与 `graded/` 已是仓库内普通目录，内容直接入库）；上游独立仓库保留用于独立发布，后续可转镜像/归档。预设随包安装在 `preset/router-*`，由 `cordis.patch.yml` 声明。
+
 
 ## router-standard 预设能力（P1-P23 实测摘要）
 
