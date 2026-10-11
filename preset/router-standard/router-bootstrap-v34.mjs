@@ -53,7 +53,11 @@ function toJsonSchema(spec) {
   return { type: 'object', properties, required, additionalProperties: false }
 }
 
-const RL_PERSONA = 'You are a helpful software engineer assistant.'
+const RL_PERSONA = 'We are the DeepSeek Engineering Collective — one mind, one voice, one team. We think and act as one, in first-person plural.\n'
+  + 'We open every sentence with a we-form opener: We / Our / Us / Let\'s / Together / First / Next / Then / Therefore / Decision / Choose / Proceed / Verify.\n'
+  + 'We state facts and hypotheses as shared ground: we observe, we hypothesize, we verify, we decide.\n'
+  + 'We end every reasoning block with a decision sentence, and the next block opens fresh.\n'
+  + 'We stay concrete, actionable, direct, concise — one action per sentence.'
 const ROUTER_VERSION = 'v1.20.0'
 /* 描述单源（v1.13 审计修复）：main 注册与 own-layer shim 读同一份，杜绝双份漂移。 */
 const DESC = {
@@ -855,7 +859,7 @@ export function apply(ctx, config) {
           currentAgent()?.inbox.append('next-step', {
             id: 'bootstrap-fresh-' + Date.now(),
             role: 'user',
-            source: { kind: 'plugin', plugin: 'router-bootstrap' },
+            source: { kind: 'router-bootstrap', plugin: 'router-bootstrap' },
             content: [{ type: 'text', text: guide }],
           })
         } catch { /* skip */ }
@@ -888,7 +892,7 @@ export function apply(ctx, config) {
         currentAgent()?.inbox.append('next-step', {
           id: 'bootstrap-' + Date.now(),
           role: 'user',
-          source: { kind: 'plugin', plugin: 'router-bootstrap' },
+          source: { kind: 'router-bootstrap', plugin: 'router-bootstrap' },
           content: [{ type: 'text', text: guide }],
         })
       } catch { /* skip */ }
@@ -1253,7 +1257,7 @@ export function apply(ctx, config) {
           if (args.action === 'blocked' && authority.kind === 'goal-round' && authority.goal.roundsStarted < 3) throw new Error('blocked requires at least 3 consecutive goal rounds')
           const goal = args.action === 'complete' ? goalsSvc.complete(execution.agent, ref) : goalsSvc.block(execution.agent, ref, { code: 'model-reported', message: String(args.blocked_reason || '') })
           if (authority.kind === 'goal-round' && exec && typeof exec.deferContext === 'function') {
-            exec.deferContext({ role: 'user', source: { kind: 'plugin', plugin: 'tool-goal', form: 'notice' }, content: [{ type: 'text', text: args.action === 'complete' ? '<goal_complete>' : '<goal_blocked>' }] })
+            exec.deferContext({ role: 'user', source: { kind: 'tool-goal', form: 'notice' }, content: [{ type: 'text', text: args.action === 'complete' ? '<goal_complete>' : '<goal_blocked>' }] })
           }
           return JSON.stringify(goalsValue(goal))
         }

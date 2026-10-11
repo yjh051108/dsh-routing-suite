@@ -63,7 +63,7 @@ function userMsg(text) {
   return {
     id: 'graded-' + Date.now() + '-' + Math.floor(Math.random() * 1e6),
     role: 'user',
-    source: { kind: 'plugin', plugin: 'dsh-graded-mode' },
+    source: { kind: 'dsh-graded-mode' },
     content: [{ type: 'text', text }],
   }
 }

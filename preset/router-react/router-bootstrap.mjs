@@ -179,7 +179,7 @@ export function apply(ctx, config) {
       target.inbox.append('next-step', {
         id: `router-guide-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         role: 'user',
-        source: { kind: 'plugin', plugin: 'router-bootstrap' },
+        source: { kind: 'router-bootstrap', plugin: 'router-bootstrap' },
         content: [{ type: 'text', text: guide }],
       })
     } catch { /* duplicate/ordering races: skip */ }
