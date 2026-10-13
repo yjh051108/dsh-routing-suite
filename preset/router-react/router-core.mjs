@@ -152,12 +152,19 @@ export function classifyTask(text) {
  * `session.events` read is `undefined` and throws on `.find`/`.some`
  * ("Cannot read properties of undefined (reading 'some')" ended every
  * router-react turn). The supported entry point is `snapshotEvents()`.
+ *
+ * Keep in sync with the local copy inside
+ * `preset/router-react/router-bootstrap*.mjs`: that copy has to exist because
+ * the preset's `?v=N` cache-bust applies to the entry module only, so a
+ * relative import of this file resolves WITHOUT a query and hits the ESM cache
+ * of a generation mounted earlier in the same process — new exports here stay
+ * invisible to it.
  */
 export function sessionEvents(session) {
   if (!session) return []
   if (Array.isArray(session.events)) return session.events
   if (typeof session.snapshotEvents === 'function') {
-    try { return session.snapshotEvents() } catch { return [] }
+    try { return session.snapshotEvents() || [] } catch { return [] }
   }
   return []
 }

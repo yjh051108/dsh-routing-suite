@@ -72,6 +72,27 @@ test('issue #13: sessionMode skips plugin-origin messages when pinning the band'
   assert.equal(sessionMode({ events: [{ type: 'user/message', data: legacy }] }), 0)
 })
 
+test('router-react: sessionEvents tolerates 0.2.x session shapes (no events array)', async () => {
+  // 0.2.x 的真实 session 不暴露 events 数组，入口是 snapshotEvents()；裸读
+  // session.events 曾让每一轮 router-react 在装配阶段就抛
+  // "Cannot read properties of undefined (reading 'some')"。
+  const { sessionEvents, sessionMode: reactSessionMode } = await import('./router-react/router-core.mjs')
+  const buildTask = { kind: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: '从零开发一个马里奥网页游戏' }] }
+  // 无 session / 两种入口都没有 → 空数组，不抛
+  assert.deepEqual(sessionEvents(undefined), [])
+  assert.deepEqual(sessionEvents(null), [])
+  assert.deepEqual(sessionEvents({ id: 'no-events' }), [])
+  // 旧形状（events 数组）仍可用
+  assert.equal(sessionEvents({ events: [{ type: 'user/message', data: buildTask }] }).length, 1)
+  assert.equal(reactSessionMode({ events: [{ type: 'user/message', data: buildTask }] }), 1)
+  // 0.2.x 形状（snapshotEvents()）
+  assert.equal(reactSessionMode({ snapshotEvents: () => [{ type: 'user/message', data: buildTask }] }), 1)
+  // snapshotEvents() 返回 undefined / 抛错 → 空数组；分类退化为 weak，不抛
+  assert.deepEqual(sessionEvents({ snapshotEvents: () => undefined }), [])
+  assert.deepEqual(sessionEvents({ snapshotEvents: () => { throw new Error('boom') } }), [])
+  assert.equal(reactSessionMode({ snapshotEvents: () => undefined }), 'weak')
+})
+
 test('weak persona is model-specific (P11/P24)', () => {
   const pro = personaFor('weak', 'deepseek-v4-pro')
   const flash = personaFor('weak', 'deepseek-v4-flash')
