@@ -20,9 +20,39 @@
  */
 
 import {
-  applyPersona, bandFor, bandOf, coreFor, parseMode, personaFor, sessionMode, testinessFor, clamp01,
-  isComplexTask,
+  applyPersona, bandFor, bandOf, coreFor, parseMode, personaFor, testinessFor, clamp01,
+  classifyTask, extractText, isComplexTask,
 } from './router-core.mjs'
+
+/**
+ * Session event accessor — deliberately LOCAL.
+ *
+ * The preset's cache-busting query (?v=N) only applies to this entry module: a
+ * relative import of the core module resolves WITHOUT a query and so hits the
+ * ESM cache of the generation mounted earlier in this process. Adding a new
+ * export to the core therefore fails at link time ("does not provide an export
+ * named ..."), the row never starts, and the preset goes dark until the app
+ * restarts. Anything this module needs beyond the already-cached core surface
+ * has to live here instead.
+ */
+function sessionEvents(session) {
+  if (!session) return []
+  if (Array.isArray(session.events)) return session.events
+  if (typeof session.snapshotEvents === 'function') {
+    try {
+      return session.snapshotEvents() || []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+/** Durable-event mode, without depending on the core's sessionMode(). */
+function modeFromEvents(session) {
+  const userMsg = sessionEvents(session).find((event) => event.type === 'user/message')
+  return classifyTask(extractText(userMsg?.data))
+}
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'router-bootstrap'
@@ -57,7 +87,7 @@ export function apply(ctx, config) {
     if (override !== undefined) return override
     const text = firstUserText.get(session.id)
     if (text !== undefined) return classifyTask(text)
-    return sessionMode(session)
+    return modeFromEvents(session)
   }
 
   // ── 路由模式（v0.2.0 命名，用户定义）───────────────────────────────────────
@@ -89,7 +119,7 @@ export function apply(ctx, config) {
     // and injected the WEAK band on the path-committing first request. Use the
     // live text captured by the session/event listener (or inbox pending) so
     // the first request carries the REAL classification.
-    const mode = overrides.get(session.id) ?? firstUserText.get(session.id) ?? sessionMode(session)
+    const mode = overrides.get(session.id) ?? firstUserText.get(session.id) ?? modeFromEvents(session)
     const selectedModel = assembled.variables?.model
       ? { provider: assembled.variables?.provider, model: assembled.variables.model }
       : undefined
@@ -117,7 +147,7 @@ export function apply(ctx, config) {
       core = new Set(legacyCore(mode))
     }
 
-    if (session.events.some((event) => event.type === 'tool/call')) {
+    if (sessionEvents(session).some((event) => event.type === 'tool/call')) {
       return { ...assembled, sections, contexts: [] } // promoted: full catalog
     }
 
@@ -127,6 +157,9 @@ export function apply(ctx, config) {
       throw new Error(`${name}: no platform shell in catalog`)
     }
     core.add(shell)
+    // 视觉模型（v4-flash-vision-exp 等）：首轮面齐平标准模式——read_image 直接可用
+    // （官方已声明 image 输入；首轮即读图，无需等 promoted 全量目录）。
+    if (/vision/i.test(String(modelId || '')) && available.has('read_image')) core.add('read_image')
 
     return {
       ...assembled,
@@ -170,7 +203,7 @@ export function apply(ctx, config) {
     const agent = ctx.get('agent')
     const target = agent !== undefined && agent.session === session ? agent : [...agents.values()].find((a) => a.session === session)
     if (target === undefined || target.inbox === undefined) return
-    const mode = overrides.get(session.id) ?? firstUserText.get(session.id) ?? sessionMode(session)
+    const mode = overrides.get(session.id) ?? firstUserText.get(session.id) ?? modeFromEvents(session)
     if (bandOf(mode) !== 'weak') return // strong modes need no guidance
     if (!text.trim()) return
     const guide = isComplexTask(text) ? GUIDE_DEEP : GUIDE_WEAK
@@ -240,7 +273,7 @@ export function apply(ctx, config) {
       if (session === undefined) return 'no agent session'
       if (parsed === 'auto') overrides.delete(session.id)
       else overrides.set(session.id, parsed === 'weak' ? 'weak' : clamp01(parsed))
-      const current = overrides.get(session.id) ?? sessionMode(session)
+      const current = overrides.get(session.id) ?? modeFromEvents(session)
       return `mode=${fmtMode(current)} (band=${bandFor(current)}) — next request applies`
     },
   })
