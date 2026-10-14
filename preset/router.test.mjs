@@ -300,3 +300,41 @@ test('v1.16: muteAwareList/isMemoryTool + external evidence', async () => {
     assert.equal(okr.ok, true)
   } finally { rmSync(tmp, { force: true }) }
 })
+
+test('router-react: sessionMode 跳过非用户来源消息（与 spec/standard 对齐，issue #13）', async () => {
+  // 原先只有 react core 没有这层过滤：首条落库的 user/message 常常是插件注入的
+  // （approval 通知 / runtime-context 快照 / router 自己的引导），按它分类会把整轮
+  // 判成 weak，而 spec/standard 早已过滤——三套预设行为不一致。
+  const { sessionMode: reactSessionMode } = await import('./router-react/router-core.mjs')
+  const build = { kind: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: '从零开发一个马里奥网页游戏' }] }
+  const approval = { kind: 'user', source: { kind: 'plugin', plugin: 'user-approval' }, content: [{ type: 'text', text: 'The approval policy changed from "ask" to "never"' }] }
+  const guide = { kind: 'user', source: { kind: 'router-bootstrap', plugin: 'router-bootstrap' }, content: [{ type: 'text', text: 'Router: classify this task now' }] }
+  // 插件消息在前、真实用户消息在后 → 必须按真实消息定带（react band = 1）
+  assert.equal(reactSessionMode({ events: [{ type: 'user/message', data: approval }, { type: 'user/message', data: build }] }), 1)
+  // router 自己的引导同样不参与定带（source.kind 是插件名而非 'plugin'）
+  assert.equal(reactSessionMode({ events: [{ type: 'user/message', data: guide }, { type: 'user/message', data: build }] }), 1)
+  // 全部都是非用户来源时回退到任意首条 user/message（不抛；与 spec/standard 同语义）
+  assert.equal(reactSessionMode({ events: [{ type: 'user/message', data: approval }] }), 'weak')
+  // 无 source 标记的旧会话按用户来源处理
+  assert.equal(reactSessionMode({ events: [{ type: 'user/message', data: { kind: 'user', content: [{ type: 'text', text: '修复这个仓库里的 bug' }] } }] }), 0)
+})
+
+test('spec/standard 别名 core：0.2.x 会话形状与 snapshotEvents 兜底（与 react 对齐）', async () => {
+  // 别名文件（agent.cordis.yml 之外的入口、也是测试与运行面共用面）此前与 -v10/-v34
+  // 快照存在漂移风险：sessionEvents 缺 `|| []`，且 sessionMode 绕过该辅助函数。
+  const spec = await import('./router-spec/router-core.mjs')
+  const std = await import('./router-standard/router-core.mjs')
+  const build = { kind: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: '从零开发一个马里奥网页游戏' }] }
+  for (const [label, core] of [['spec', spec], ['standard', std]]) {
+    assert.equal(typeof core.sessionEvents, 'function', `${label}: 导出 sessionEvents（bootstrap 依赖）`)
+    assert.deepEqual(core.sessionEvents(undefined), [], `${label}: undefined → []`)
+    assert.deepEqual(core.sessionEvents({ id: 'x' }), [], `${label}: 无 events/snapshotEvents → []`)
+    assert.equal(core.sessionEvents({ events: [{ type: 'user/message', data: build }] }).length, 1, `${label}: events 数组直读`)
+    assert.equal(core.sessionEvents({ snapshotEvents: () => [{ type: 'user/message', data: build }] }).length, 1, `${label}: 0.2.x snapshotEvents`)
+    assert.deepEqual(core.sessionEvents({ snapshotEvents: () => undefined }), [], `${label}: snapshotEvents 返回 undefined → []`)
+    assert.deepEqual(core.sessionEvents({ snapshotEvents: () => { throw new Error('boom') } }), [], `${label}: snapshotEvents 抛错 → []`)
+    // 0.2.x 的真实 session 只有 snapshotEvents()：必须能定带，且兜底后不抛
+    assert.equal(core.sessionMode({ snapshotEvents: () => [{ type: 'user/message', data: build }] }), 1, `${label}: 0.2.x 真实 session 可定带`)
+    assert.equal(core.sessionMode({ snapshotEvents: () => undefined }), 'weak', `${label}: 兜底后退化为 weak，不抛`)
+  }
+})

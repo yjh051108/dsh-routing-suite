@@ -23,6 +23,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { apply as applyStandard, RL_PERSONA } from './router-standard/router-bootstrap-v34.mjs' // v1.18.3：测试面=运行面（agent.cordis.yml 挂载 -v34）
 import { apply as applySpec } from './router-spec/router-bootstrap-v10.mjs' // v1.18.3: 测试面=运行面（agent.cordis.yml 挂载 -v10）
+import { apply as applyReact } from './router-react/router-bootstrap-v17.mjs' // v1.19.x: 测试面=运行面（agent.cordis.yml 挂载 -v17）
 import { classifyTask, sessionMode } from './router-standard/router-core.mjs'
 
 // ── minimal Cordis-shaped context ──────────────────────────────────────────
@@ -573,4 +574,43 @@ test('v0.9: final phase releases the restrict (no new restriction)', async () =>
   await advance.execute({ reason: 'to 3' })
   // 阶段 0/1/2 各设一次 restrict；阶段 3 释放（不再新增）
   assert.equal(agent._restrictCalls.length, 3, 'stage 3 must not install another restriction')
+})
+
+// ── router-react: near-field guidance channel (bandOf(string) 回归) ─────────
+
+test('react: weak 任务拿到近场引导，react 任务不拿（bandOf 收字符串的回归）', async () => {
+  // 回归点：pre-step / session-event 里的 `mode` 曾直接取 firstUserText（一个字符串）
+  // 传给 bandOf() → clamp01(NaN) → 0 → 'spec' → 弱模式引导永远发不出去。
+  // 现在走 currentMode()（override → 文本分类 → 持久事件），弱模式可达。
+  const h = makeHarness(applyReact, {})
+  const session = makeSession()
+  const appends = []
+  const agent = {
+    session,
+    options: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+    inbox: { append(kind, msg) { appends.push({ kind, msg }) } },
+  }
+  h.agentRef.current = agent
+  const weak = userMessage('m1', '今天天气怎么样')
+  h.emit('agent/inbox/claimed', { agent, message: weak })
+  const assembled = await h.assemble(baseAssembled(), { agent, scope: agent })
+  assert.ok(assembled.sections.find((s) => s.name === 'router-persona'), 'react 预设也注入 router-persona 段')
+  h.emit('session/event', session, { type: 'user/message', data: weak })
+  await new Promise((resolve) => setTimeout(resolve, 0)) // queueMicrotask 落库
+  assert.equal(appends.length, 1, 'weak 任务必须收到近场引导')
+  assert.equal(appends[0].kind, 'next-step')
+  assert.equal(appends[0].msg.source.plugin, 'router-bootstrap')
+  assert.match(appends[0].msg.content[0].text, /classify this task/)
+  // 强模式（react band）不需要引导
+  const h2 = makeHarness(applyReact, {})
+  const s2 = makeSession()
+  const appends2 = []
+  const agent2 = { session: s2, options: { provider: 'deepseek-official', model: 'deepseek-v4-flash' }, inbox: { append(kind, msg) { appends2.push(msg) } } }
+  h2.agentRef.current = agent2
+  const build = userMessage('m2', '从零开发一个马里奥网页游戏，生成完整实现')
+  h2.emit('agent/inbox/claimed', { agent: agent2, message: build })
+  await h2.assemble(baseAssembled(), { agent: agent2, scope: agent2 })
+  h2.emit('session/event', s2, { type: 'user/message', data: build })
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  assert.equal(appends2.length, 0, 'react band 不发引导')
 })

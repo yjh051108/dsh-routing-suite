@@ -147,7 +147,7 @@ export function classifyTask(text) {
 
 /** Per-session mode derived from durable events (resume-safe). */
 export function sessionMode(session) {
-  const events = session.events || (typeof session.snapshotEvents === 'function' ? session.snapshotEvents() : [])
+  const events = sessionEvents(session)
   // #13：跳过插件注入的消息（approval/runtime-context/router 引导）——它们不代表任务
   const userMsg = events.find((e) => e.type === 'user/message' && e.data?.source?.kind !== 'plugin')
     ?? events.find((e) => e.type === 'user/message')
@@ -159,7 +159,9 @@ export function sessionEvents(session) {
   if (!session) return []
   if (Array.isArray(session.events)) return session.events
   if (typeof session.snapshotEvents === 'function') {
-    try { return session.snapshotEvents() } catch { return [] }
+    // 与 router-react 同款兜底：host 的 snapshotEvents() 若返回 undefined，
+    // 直接 return 会把 undefined 漏给调用方（随后 .find/.some 上抛 TypeError）。
+    try { return session.snapshotEvents() || [] } catch { return [] }
   }
   return []
 }

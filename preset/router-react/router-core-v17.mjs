@@ -169,10 +169,20 @@ export function sessionEvents(session) {
   return []
 }
 
-/** Per-session mode derived from durable events (resume-safe). */
+/**
+ * Per-session mode derived from durable events (resume-safe).
+ *
+ * 与 router-spec / router-standard 对齐（原先只有 react 没有这层过滤）：
+ * 只有**用户来源**的消息可以定带。插件注入的 user-role 消息（approval 通知、
+ * runtime-context 快照、agent-instructions、router 自己的引导）带
+ * `source.kind` 为其它值，而会话里第一条 user/message 往往正是它们——按它
+ * 分类会把整轮判成 weak。无 source 标记的按用户来源处理（兼容旧会话），
+ * 并回退到任意首条 user/message。
+ */
 export function sessionMode(session) {
   const events = sessionEvents(session)
-  const userMsg = events.find((e) => e.type === 'user/message')
+  const userMsg = events.find((e) => e.type === 'user/message' && (e.data?.source?.kind === 'user' || e.data?.source?.kind === undefined))
+    ?? events.find((e) => e.type === 'user/message')
   return classifyTask(extractText(userMsg?.data))
 }
 

@@ -116,10 +116,11 @@ export function apply(ctx, config) {
 
     // issue #3 fix: the first assembly happens before the first user/message
     // event lands in session.events, so sessionMode() saw an empty transcript
-    // and injected the WEAK band on the path-committing first request. Use the
-    // live text captured by the session/event listener (or inbox pending) so
-    // the first request carries the REAL classification.
-    const mode = overrides.get(session.id) ?? firstUserText.get(session.id) ?? modeFromEvents(session)
+    // and injected the WEAK band on the path-committing first request. Take the
+    // mode from currentMode(): override → classification of the text captured by
+    // the session/event listener → durable events. Passing the captured TEXT in
+    // directly would hand bandOf() a string (clamp01(NaN) → 0 → spec).
+    const mode = currentMode(session)
     const selectedModel = assembled.variables?.model
       ? { provider: assembled.variables?.provider, model: assembled.variables.model }
       : undefined
@@ -203,7 +204,7 @@ export function apply(ctx, config) {
     const agent = ctx.get('agent')
     const target = agent !== undefined && agent.session === session ? agent : [...agents.values()].find((a) => a.session === session)
     if (target === undefined || target.inbox === undefined) return
-    const mode = overrides.get(session.id) ?? firstUserText.get(session.id) ?? modeFromEvents(session)
+    const mode = currentMode(session)
     if (bandOf(mode) !== 'weak') return // strong modes need no guidance
     if (!text.trim()) return
     const guide = isComplexTask(text) ? GUIDE_DEEP : GUIDE_WEAK

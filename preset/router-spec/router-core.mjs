@@ -158,10 +158,22 @@ export function classifyTask(text) {
  * user-origin message exists.
  */
 export function sessionMode(session) {
-  const events = session.events
+  const events = sessionEvents(session)
   const userMsg = events.find((e) => e.type === 'user/message' && (e.data?.source?.kind === 'user' || e.data?.source?.kind === undefined))
     ?? events.find((e) => e.type === 'user/message')
   return classifyTask(extractText(userMsg?.data))
+}
+
+// 新增辅助（router-core）：
+export function sessionEvents(session) {
+  if (!session) return []
+  if (Array.isArray(session.events)) return session.events
+  if (typeof session.snapshotEvents === 'function') {
+    // 与 router-react 同款兜底：host 的 snapshotEvents() 若返回 undefined，
+    // 直接 return 会把 undefined 漏给调用方（随后 .find/.some 上抛 TypeError）。
+    try { return session.snapshotEvents() || [] } catch { return [] }
+  }
+  return []
 }
 
 export function extractText(data) {
