@@ -227,7 +227,7 @@ export function apply(ctx, config) {
       guides.push({
         id,
         role: 'user',
-        source: { kind: 'plugin', plugin: 'router-bootstrap' },
+        source: { kind: 'plugin:router-bootstrap' },
         content: [{ type: 'text', text: isComplexTask(text) ? GUIDE_DEEP : GUIDE_WEAK }],
       })
     }

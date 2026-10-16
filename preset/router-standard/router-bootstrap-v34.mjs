@@ -755,7 +755,7 @@ export function apply(ctx, config) {
           currentAgent()?.inbox.append('next-step', {
             id: 'bootstrap-fresh-' + Date.now(),
             role: 'user',
-            source: { kind: 'plugin', plugin: 'router-bootstrap' },
+            source: { kind: 'plugin:router-bootstrap' },
             content: [{ type: 'text', text: guide }],
           })
         } catch { /* skip */ }
@@ -788,7 +788,7 @@ export function apply(ctx, config) {
         currentAgent()?.inbox.append('next-step', {
           id: 'bootstrap-' + Date.now(),
           role: 'user',
-          source: { kind: 'plugin', plugin: 'router-bootstrap' },
+          source: { kind: 'plugin:router-bootstrap' },
           content: [{ type: 'text', text: guide }],
         })
       } catch { /* skip */ }
@@ -1163,7 +1163,7 @@ export function apply(ctx, config) {
           if (args.action === 'blocked' && authority.kind === 'goal-round' && authority.goal.roundsStarted < 3) throw new Error('blocked requires at least 3 consecutive goal rounds')
           const goal = args.action === 'complete' ? goalsSvc.complete(execution.agent, ref) : goalsSvc.block(execution.agent, ref, { code: 'model-reported', message: String(args.blocked_reason || '') })
           if (authority.kind === 'goal-round' && exec && typeof exec.deferContext === 'function') {
-            exec.deferContext({ role: 'user', source: { kind: 'plugin', plugin: 'tool-goal', form: 'notice' }, content: [{ type: 'text', text: args.action === 'complete' ? '<goal_complete>' : '<goal_blocked>' }] })
+            exec.deferContext({ role: 'user', source: { kind: 'tool-goal', form: 'notice' }, content: [{ type: 'text', text: args.action === 'complete' ? '<goal_complete>' : '<goal_blocked>' }] })
           }
           return JSON.stringify(goalsValue(goal))
         }
