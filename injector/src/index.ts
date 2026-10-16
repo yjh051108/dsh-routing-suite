@@ -403,7 +403,7 @@ const PLUGIN_ID = ${JSON.stringify(pkgName)}
 
 const CLIENT_EXTERNALS = [
   'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client',
-  'cordis',
+  '@deepseek-ai/cordis',
   '@deepseek-ai/dsh-client-ui-slots',
   '@deepseek-ai/dsh-client-runtime/client',
 ]
@@ -441,7 +441,7 @@ function scaffoldPackageJson(pkgName: string, description: string, form: string)
   const peerDeps: Record<string, string> = {
     '@deepseek-ai/dsh-llm': '>=0.0.1-rc <2',
     '@deepseek-ai/dsh-tools': '>=0.0.1-rc <2',
-    'cordis': '>=4.0.0-rc <5',
+    '@deepseek-ai/cordis': '>=4.0.0-rc <5',
     '@deepseek-ai/schemastery': '^3.18.2',
   }
   if (withClient) {
@@ -1060,15 +1060,31 @@ export function apply(ctx: AppContext, config: Config): void {
             // 是 reboot 上下文的必要适配，且需 _disposing 豁免（entry._dispose
             // 官方计数）与 disabled 兜底清理。
             const entry = selfEntry as any
-            if (!entry || typeof entry._dispose !== 'function') {
-              throw new Error('selfEntry 无官方 _dispose（loader 契约缺失）')
+            // ⚠️ 契约兼容（实测校准）：新版 cordis-plugin-loader（bundled 1.0.2）入口
+            // 有 entry._dispose(fiber?)；但运行中的宿主用的是**旧版 Entry**——
+            // 原型仅 {evaluate, update, refresh, _commitVolatile, init, _init,
+            // _patchContext, disabledOf}，既无 _dispose 也无 stop/dispose。
+            // 旧版官方处置路径 = entry.fiber.dispose()（fiber 原型有 dispose）。
+            // 原实现硬要求 _dispose → 旧宿主上自重载 100% 失败（实测：
+            // "reboot-failed: selfEntry 无官方 _dispose（loader 契约缺失）"）。
+            const disposeOld = async (): Promise<void> => {
+              if (typeof entry._dispose === 'function') { await entry._dispose(); return }
+              const fiber = entry.fiber
+              if (fiber && typeof fiber.dispose === 'function') { await fiber.dispose(); return }
+              if (typeof entry.stop === 'function') { await entry.stop(); return }
+              throw new Error('selfEntry 无可用处置路径（loader 契约缺失：_dispose/fiber.dispose/stop 皆无）')
             }
-            const rebootCtx = ctx.root as any
+            // ⚠️ registry 归属（实测校准）：重建 fiber 的 registry 必须与**本入口所在
+            // loader 树**一致。ctx.root 是另一棵树的 Context（实测 ctx.root.loader
+            // !== ctx.loader），经它 registry.plugin 造出的 fiber 不在 include 组的
+            // 监听范围内 → 入口永远停在旧 fiber/失效态。entry.ctx 是本入口的活跃
+            // Context（dispose 前有效），优先用它；兜底才用 ctx.root。
+            const rebootCtx = ((entry as any).ctx ?? ctx.root) as any
             const previousPlugin = entry.fiber?.runtime?.callback ?? null
             const fresh = rebootCtx.loader.unwrapExports(
               await entry.parent.tree.import(entry.options.name, () => []),
             )
-            await entry._dispose()
+            await disposeOld()
             const startWith = async (plugin: any): Promise<void> => {
               const fiber = rebootCtx.registry.plugin(plugin, entry.options.config ?? {}, entry.getOuterStack)
               fiber.entry = entry
@@ -3041,7 +3057,7 @@ export function apply(ctx: AppContext, config: Config): void {
         writeFileSync(join(tmpDir, 'package.json'), JSON.stringify({
           name: TEST_PKG, version: '0.0.1', private: true, type: 'module',
           main: './lib/index.js', files: ['lib'], license: 'BSD-3-Clause',
-          peerDependencies: { '@deepseek-ai/dsh-tools': '>=0.0.1-rc <2', 'cordis': '>=4.0.0-rc <5' },
+          peerDependencies: { '@deepseek-ai/dsh-tools': '>=0.0.1-rc <2', '@deepseek-ai/cordis': '>=4.0.0-rc <5' },
           devDependencies: { '@types/node': '^24.13.3', typescript: '^5.9.0' },
           scripts: { build: 'bash scripts/build.sh' },
         }, null, 2) + '\n', 'utf8')
