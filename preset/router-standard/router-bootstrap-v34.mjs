@@ -15,7 +15,7 @@
  */
 
 import {
-  bandFor, sessionMode, extractText, isComplexTask, sessionEvents
+  bandFor, sessionMode, extractText, sessionEvents, personaFor, classifyTask
 } from './router-core-v34.mjs'
 import { join, dirname } from 'node:path'
 import { homedir, tmpdir } from 'node:os'
@@ -54,7 +54,47 @@ function toJsonSchema(spec) {
 }
 
 const RL_PERSONA = 'You are a helpful software engineer assistant.'
-const ROUTER_VERSION = 'v1.20.0'
+/**
+ * v1.21：接通 core 已设计好的多 persona 路由（此前 v34 只硬编码 SPEC_PERSONA，
+ * 把 personaFor 的四档 persona 全部旁路：react 模式拿不到 REACT_PERSONA、
+ * 弱模型拿不到 WEAK_*，与 router-core 的 band 设计不一致）。
+ *
+ * modelId 取该会话当前选择（弱档据此在 WEAK_PRO / WEAK_FLASH 间二选一）。
+ */
+function personaOf(mode, modelId) {
+  try {
+    return personaFor(mode, modelId)
+  } catch {
+    return RL_PERSONA
+  }
+}
+
+/**
+ * mode 解析单源（v1.21 审计修复）：注入面与 dev_router_status 必须同源，
+ * 否则状态面报的 band/persona 与模型真实收到的不是一回事。
+ *
+ * 优先级（首轮 assemble 时 session.events 往往还不含本条用户消息——
+ * agent/inbox/claimed 先于 assemble，消息在 pre-step 之后才落盘）：
+ *   1) 显式 override（用户/工具切换）
+ *   2) firstUserText（claimed 阶段捕获的首条真实用户文本）
+ *   3) sessionMode(session)（durable events 兜底，resume 场景）
+ */
+function modeOf(session, override, firstText) {
+  if (override !== undefined && override !== null) return override
+  const byText = classifyText(firstText)
+  if (byText !== undefined) return byText
+  try {
+    return sessionMode(session)
+  } catch {
+    return 'weak'
+  }
+}
+
+/** classifyTask 的薄封装：文本缺失时不误判（返回 undefined 交给下游兜底）。 */
+function classifyText(text) {
+  return typeof text === 'string' && text.trim() ? classifyTask(text) : undefined
+}
+const ROUTER_VERSION = 'v1.21.0'
 /* 描述单源（v1.13 审计修复）：main 注册与 own-layer shim 读同一份，杜绝双份漂移。 */
 const DESC = {
   toolsCatalog: '渐进式披露一级：默认只列当前阶段可调工具（未解锁不点名、不预告后续工具）；query 单点白盒（命中未解锁才给相关行，带解锁阶段/交付期标注）；无全量出口——严格按阶段推进，未解锁工具名称不进入视野。行标注=运行时真绑定。',
@@ -593,7 +633,7 @@ function applyStageRestrict(agent, stage) {
 }
 
 export function apply(ctx, config) {
-  try { mkdirSync(join(process.env.DSH_HOME || homedir(), 'router-standard'), { recursive: true }); writeFileSync(join(process.env.DSH_HOME || homedir(), 'router-standard', 'last-mount.txt'), 'new-gen v0.8 ' + new Date().toISOString(), 'utf8') } catch { /* marker */ }
+  try { mkdirSync(join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'router-standard'), { recursive: true }); writeFileSync(join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'router-standard', 'last-mount.txt'), 'new-gen v0.8 ' + new Date().toISOString(), 'utf8') } catch { /* marker */ }
   // 运行环境修整：① node 进 PATH（harness 的 node 在自定义运行时目录，不在系统 PATH——v1.5 实测
   // "node not recognized" 的根因）；② Git bin 前置（让 git 在任何 shell 都可用；bash 工具在 win32
   // 已禁用——host 的 shell seam 在 win32 只提供 pwsh，此前 bash 行在 win32 实为 pwsh 语义）。
@@ -609,7 +649,7 @@ export function apply(ctx, config) {
     // shell 解析诊断（v1.4.1→v1.5）：bash/node 实际解析到哪——事实文件，不再靠猜。
     try {
       const cands = fore.filter((e) => existsSync(join(e, process.platform === 'win32' ? 'bash.exe' : 'bash')))
-      writeFileSync(join(process.env.DSH_HOME || homedir(), 'router-standard', 'bash-diag.json'),
+      writeFileSync(join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'router-standard', 'bash-diag.json'),
         JSON.stringify({ at: new Date().toISOString(), win32: process.platform === 'win32', nodeDir, gitCandidates: cands, nodeOnPath: fore.some((e) => existsSync(join(e, 'node.exe'))) }, null, 2), 'utf8')
     } catch { /* 诊断失败不阻塞 */ }
   } catch { /* PATH 修整失败不阻塞 */ }
@@ -626,8 +666,26 @@ export function apply(ctx, config) {
     if (session !== undefined && !firstUserText.has(session.id)) firstUserText.set(session.id, text.trim())
   })
 
+  // ── {{cwd}} 兜底（修复：unknown prompt variable "{{cwd}}"）─────────────────
+  // 症状：unknown prompt variable "{{cwd}}" in section "deployment:persona-prefix"
+  //       回显 registered variables 只有 provider, model。
+  // 根因：部署/preset 的 persona 文案里含 {{cwd}}，该变量本应由 host 的
+  //       dsh-agent-loop 通过 ctx.systemPrompt.variable('cwd', ...) 注册；但本
+  //       handler 的三条早退路径（agent===undefined、parentSession 子会话、
+  //       以及下游分支）会让原文案原样进入渲染，一旦该注册不在本次装配的变量表内，
+  //       dsh-system-prompt 对未知变量是硬失败（宁可报错也不发畸形提示词）。
+  // 修法：本 handler 位于装配链上且必然执行，故在此补齐 cwd 变量（已有值则不动），
+  //       取值 session.header.cwd → process.cwd()。文案不必删，也不依赖注册顺序。
+  function ensureCwdVariable(done, context) {
+    const vars = done?.variables
+    if (vars !== undefined && vars.cwd !== undefined && vars.cwd !== null) return done
+    const fromSession = context?.agent?.session?.header?.cwd
+    const value = (typeof fromSession === 'string' && fromSession.length > 0) ? fromSession : process.cwd()
+    return { ...done, variables: { ...(vars || {}), cwd: value } }
+  }
+
   ctx.on('system-prompt/assemble', async (_assembly, context, next) => {
-    const assembled = await next()
+    const assembled = ensureCwdVariable(await next(), context)
     const agent = context.agent
     if (agent === undefined) return assembled
     if (agent.session?.header?.parentSession !== undefined) return assembled
@@ -640,22 +698,24 @@ export function apply(ctx, config) {
     if (selectedModel?.model) sessionModels.set(session.id, selectedModel)
 
     const promoted = sessionEvents(session).some((event) => event.type === 'tool/call')
+    const resolvedMode = modeOf(session, overrideMap().get(session.id), firstUserText.get(session.id))
+    const sessionPersona = personaOf(resolvedMode, sessionModels.get(session.id)?.model)
     const planSection = (assembled.sections || []).find((s) => /plan/i.test(s.name))
     const baseSections = planSection
-      ? [planSection, { name: 'router-persona', text: RL_PERSONA, order: 0 }]
-      : [{ name: 'router-persona', text: RL_PERSONA, order: 0 }]
+      ? [planSection, { name: 'router-persona', text: sessionPersona, order: 0 }]
+      : [{ name: 'router-persona', text: sessionPersona, order: 0 }]
 
     if (!promoted) {
       // 首轮：无 restrict + 工具面只留 phase_begin（纯 RL 条件 = 稳定 we）
       return { ...assembled, sections: baseSections, contexts: [], tools: assembled.tools.filter((tool) => tool.name === 'phase_begin') }
     }
 
-    // promoted：官方 sections 回流（persona 保持 RL 句）+ 引导带宽控 + 阶段声明 + 常驻段
+    // promoted：官方 sections 回流（persona 按 mode 保持）+ 引导带宽控 + 阶段声明 + 常驻段
     const stage = ensureStage()[session.id]?.stage ?? 0
     const toolsSvc = agent?.ctx?.get?.('tools')
     const fullNames = knownToolNames(toolsSvc, agent)
     const sections = filterToolGuidance((assembled.sections || []).map((s) =>
-      /persona/i.test(s.name) ? { ...s, text: RL_PERSONA } : s
+      /persona/i.test(s.name) ? { ...s, text: sessionPersona } : s
     ), stage, fullNames)
     // v1.18.1 口径统一：先安装 meta shim，再基于同一注册面渲染 stageText（与 dev_router_status 同源）
     if (!shimmedSessions.has(session.id)) {
@@ -755,7 +815,7 @@ export function apply(ctx, config) {
           currentAgent()?.inbox.append('next-step', {
             id: 'bootstrap-fresh-' + Date.now(),
             role: 'user',
-            source: { kind: 'plugin', plugin: 'router-bootstrap' },
+            source: { kind: 'plugin:router-bootstrap' },
             content: [{ type: 'text', text: guide }],
           })
         } catch { /* skip */ }
@@ -788,7 +848,7 @@ export function apply(ctx, config) {
         currentAgent()?.inbox.append('next-step', {
           id: 'bootstrap-' + Date.now(),
           role: 'user',
-          source: { kind: 'plugin', plugin: 'router-bootstrap' },
+          source: { kind: 'plugin:router-bootstrap' },
           content: [{ type: 'text', text: guide }],
         })
       } catch { /* skip */ }
@@ -893,14 +953,14 @@ export function apply(ctx, config) {
       const agent = currentAgent()
       const stage = ensureStage()[sid]?.stage ?? 0
       const sum = stageSummary(stage)
-      const mode = overrideMap().get(sid) ?? sessionMode(session)
+      const mode = modeOf(session, overrideMap().get(sid), firstUserText.get(sid)) // v1.21：与注入面同源
       return [
         'router=standard (progressive, ' + ROUTER_VERSION + ')',
         'phase=' + sum.name + ' (' + sum.stage + '/3)',
         'callable=[' + muteAwareList(runtimeCallable(agent?.ctx?.get?.('tools'), agent), memoryMuted(session)).join(', ') + ']', // v1.11/v1.18.3 运行时事实（与 SDK 绑定同源；与 shim 版同口径）
         'presentation=' + readPresentation(agent),
         'mode=' + fmtMode(mode) + ' (band=' + bandFor(mode) + ')',
-        'persona=' + RL_PERSONA,
+        'persona=' + personaOf(mode, sessionModels.get(sid)?.model),
         'override=' + (overrideMap().has(sid) ? String(overrideMap().get(sid)) : 'auto'),
         'preset=' + (ctx.get('agentPresets')?.composedPreset?.(agent?.ctx) ?? 'unknown'),
         'goalTools=get_goal/create_goal/update_goal',
@@ -1018,9 +1078,9 @@ export function apply(ctx, config) {
       parameters: {},
       execute: async () => {
         const sum = stageSummary(stageOf())
-        const mode = overrideMap().get(sid) ?? sessionMode(agent?.session)
+        const mode = modeOf(agent?.session, overrideMap().get(sid), firstUserText.get(sid)) // v1.21：与注入面同源
         const cur = stageOf()
-        return 'router=standard (own-layer shim, ' + ROUTER_VERSION + ')\nphase=' + sum.name + ' (' + sum.stage + '/3)\ncallable(runtime)=' + muteAwareList(runtimeCallable(agent.ctx?.get?.('tools'), agent), memoryMuted(agent?.session)).join(', ') + '\npresentation=' + readPresentation(agent) + '\nmode=' + fmtMode(mode) + ' (band=' + bandFor(mode) + ')\npersona=' + RL_PERSONA + '\noverride=' + (overrideMap().has(sid) ? String(overrideMap().get(sid)) : 'auto') + '\npreset=' + (ctx.get('agentPresets')?.composedPreset?.(agent.ctx) ?? 'unknown') + '\ngoalTools=get_goal/create_goal/update_goal\nlastAdvance=' + (() => { const la = (ensureStage()[sid] || {}).lastAdvance; return la && Number.isFinite(la.at) ? new Date(la.at).toISOString() + (la.reason ? ' (' + la.reason + ')' : '') : 'none' })() + (cur >= STAGES.length - 1 ? '\nfullCatalog=restrict released (all tools open)' : '')
+        return 'router=standard (own-layer shim, ' + ROUTER_VERSION + ')\nphase=' + sum.name + ' (' + sum.stage + '/3)\ncallable(runtime)=' + muteAwareList(runtimeCallable(agent.ctx?.get?.('tools'), agent), memoryMuted(agent?.session)).join(', ') + '\npresentation=' + readPresentation(agent) + '\nmode=' + fmtMode(mode) + ' (band=' + bandFor(mode) + ')\npersona=' + personaOf(mode, sessionModels.get(sid)?.model) + '\noverride=' + (overrideMap().has(sid) ? String(overrideMap().get(sid)) : 'auto') + '\npreset=' + (ctx.get('agentPresets')?.composedPreset?.(agent.ctx) ?? 'unknown') + '\ngoalTools=get_goal/create_goal/update_goal\nlastAdvance=' + (() => { const la = (ensureStage()[sid] || {}).lastAdvance; return la && Number.isFinite(la.at) ? new Date(la.at).toISOString() + (la.reason ? ' (' + la.reason + ')' : '') : 'none' })() + (cur >= STAGES.length - 1 ? '\nfullCatalog=restrict released (all tools open)' : '')
       },
     })
 
@@ -1092,7 +1152,7 @@ export function apply(ctx, config) {
         const targetSid2 = shimArgs?.targetSessionId || target2.session?.id || sid
         const before2 = ap2.composedPreset(target2.ctx) ?? 'unknown'
         if (before2 === 'unknown') return 'ERROR: 未加入预设'
-        const ymlFile2 = join(process.env.DSH_HOME || homedir(), '.agent-presets', before2, 'agent.cordis.yml')
+        const ymlFile2 = join(process.env.DSH_HOME || join(homedir(), '.dsh'), '.agent-presets', before2, 'agent.cordis.yml')
         let yml2 = ''
         try { yml2 = readFileSync(ymlFile2, 'utf8') } catch (e) { return 'ERROR: 读取失败 ' + String(e) }
         const refRe2 = /(name: \.\/[A-Za-z0-9._-]+\.mjs)(\?v=\d+)?/g
@@ -1163,7 +1223,7 @@ export function apply(ctx, config) {
           if (args.action === 'blocked' && authority.kind === 'goal-round' && authority.goal.roundsStarted < 3) throw new Error('blocked requires at least 3 consecutive goal rounds')
           const goal = args.action === 'complete' ? goalsSvc.complete(execution.agent, ref) : goalsSvc.block(execution.agent, ref, { code: 'model-reported', message: String(args.blocked_reason || '') })
           if (authority.kind === 'goal-round' && exec && typeof exec.deferContext === 'function') {
-            exec.deferContext({ role: 'user', source: { kind: 'plugin', plugin: 'tool-goal', form: 'notice' }, content: [{ type: 'text', text: args.action === 'complete' ? '<goal_complete>' : '<goal_blocked>' }] })
+            exec.deferContext({ role: 'user', source: { kind: 'tool-goal', form: 'notice' }, content: [{ type: 'text', text: args.action === 'complete' ? '<goal_complete>' : '<goal_blocked>' }] })
           }
           return JSON.stringify(goalsValue(goal))
         }
@@ -1241,7 +1301,8 @@ export function apply(ctx, config) {
       if (!ap || !agent) return 'ERROR: agentPresets/agent 不可用 (target=' + label + ')'
       const before = ap.composedPreset(agent.ctx) ?? 'unknown'
       if (before === 'unknown') return 'ERROR: 当前 agent 未加入预设'
-      const home = process.env.DSH_HOME || homedir()
+      // DSH_HOME 优先：homedir() 推导会漏掉 '.dsh' 这一层（与 injector 的 dshHome 口径对齐）
+      const home = process.env.DSH_HOME || join(homedir(), '.dsh')
       const presetDir = join(home, '.agent-presets', before)
       const ymlFile = join(presetDir, 'agent.cordis.yml')
       let yml = ''

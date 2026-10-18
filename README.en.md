@@ -23,18 +23,16 @@ speced plan → check-in → group close-out → final check, with redteam gate 
 | **preset** | Reasoning-mode routing presets (router-standard / router-spec, persona-based routing) | [preset/README.md](preset/README.md) · [experiments](preset/docs/experiments.md) |
 | **graded** | Graded mode: session-level two-level task protocol (6 tools + 3 modes + per-item mode + redteam gate + audit endpoint + super panel) | [graded/README.md](graded/README.md) · [ARCHITECTURE](graded/docs/ARCHITECTURE.md) · [THEORY](graded/docs/THEORY.md) · [DATA](graded/docs/DATA.md) |
 
-## Install chain (three steps)
+## Installation (DSH 0.1.7-rc.2 and later)
+
+New DSH releases no longer discover Agent presets by scanning `.dsh\\.agent-presets`. Installing the suite root package registers both the injector and `Router Standard` through a Bundle Patch; no manual preset-directory copy is needed.
 
 ```powershell
-# 1. Clone the suite (single repo: injector/preset content is stored directly, no submodules)
-git clone https://github.com/yjh051108/dsh-routing-suite.git
-cd dsh-routing-suite
-
-# 2. One-shot install (injector assembly + preset copy + layout self-check + restart prompt)
-.\install.ps1
+# Install the complete suite from GitHub: injector + Router Standard Bundle preset
+dsh plugin --profile web add github:yjh051108/dsh-routing-suite
 ```
 
-Or manually:
+Legacy directory installation (DSH 0.1.7-rc.1 and earlier only):
 
 ```powershell
 # Step 1: assemble the injector (official assembly; bundles take over after restart)
@@ -52,8 +50,7 @@ Copy-Item -Recurse .\preset\router-spec $target
 # Step 3: restart DSH → pick Router Standard / Router Spec in a new session
 ```
 
-> Do NOT copy the `preset` directory as a whole — the extra nesting hides the
-> presets from DSH discovery.
+> This legacy directory copy is not read by DSH 0.1.7-rc.2 and later; install the root package above instead.
 
 ## Components
 

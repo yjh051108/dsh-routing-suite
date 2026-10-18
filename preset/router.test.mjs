@@ -7,7 +7,7 @@ import { writeFileSync, rmSync } from 'node:fs'
 import {
   classifyTask, personaFor, coreFor, bandFor, testinessFor, parseMode, applyPersona,
   isFlashModel, extractText, sessionMode,
-} from './router-standard/router-core.mjs'
+} from './router-standard/router-core-v34.mjs' // v1.21：测试面=运行面（agent.cordis.yml 挂载 -v34；此前误指 router-core.mjs 死快照）
 import { autoAdvance, filterToolGuidance, markerFor, runtimeMark, runtimeCallable, deliveryCheck, paramHint, isMemoryTool, muteAwareList, firstUserTask } from './router-standard/router-bootstrap-v34.mjs' // v1.18.3：测试面=运行面（agent.cordis.yml 挂载 -v34）
 
 test('react: greenfield/build tasks map to react band', () => {
@@ -22,8 +22,9 @@ test('spec: maintenance/fix tasks map to spec band', () => {
   assert.equal(classifyTask('修复这个仓库里的 bug'), 0)
 })
 
-test('mixed task lands in react band (net react keywords)', () => {
-  assert.equal(bandFor(classifyTask('帮我开发一个小游戏然后修复里面的 bug')), 'react')
+test('mixed task (both build and fix evidence) falls to weak — model decides', () => {
+  // v1.21：互斥判据——语义混杂不再由关键词计数"谁多谁赢"强制分档，交给 weak 自判
+  assert.equal(bandFor(classifyTask('帮我开发一个小游戏然后修复里面的 bug')), 'weak')
 })
 
 test('unmatched defaults to weak (internal routing)', () => {
@@ -31,9 +32,12 @@ test('unmatched defaults to weak (internal routing)', () => {
   assert.equal(bandFor('weak'), 'weak')
 })
 
-test('ties default to weak (internal routing)', () => {
-  assert.equal(classifyTask('帮我开发一个小游戏然后修复里面的 bug'), 1) // net react wins
-  assert.equal(classifyTask('开发并修复'), 'weak') // tie → weak
+test('ambiguous / architectural tasks fall to weak (internal routing)', () => {
+  // v1.21：设计/架构/系统/数据库类不再被武断分档——关键词表未覆盖即落 weak 自判
+  assert.equal(classifyTask('帮我开发一个小游戏然后修复里面的 bug'), 'weak') // mixed evidence
+  assert.equal(classifyTask('设计一下系统架构和数据库表结构'), 'weak')
+  assert.equal(classifyTask('分析一下这个系统的性能'), 'weak')
+  assert.equal(classifyTask('开发并修复'), 'weak') // mixed evidence
 })
 
 test('issue #1: plugin-generated nested user/message shape still classifies', () => {
@@ -70,6 +74,41 @@ test('issue #13: sessionMode skips plugin-origin messages when pinning the band'
   // 无 source 的历史消息按用户消息处理
   const legacy = { kind: 'user', content: [{ type: 'text', text: '修复这个仓库里的 bug' }] }
   assert.equal(sessionMode({ events: [{ type: 'user/message', data: legacy }] }), 0)
+})
+
+test('v1.21: non-plugin injected kinds (skill-catalog / dsh-mnemon) never pin the band', () => {
+  // 实测真实会话 session-d91512ad：一条 user/message 之后跟着 skill-catalog、
+  // dsh-mnemon、plugin:router-bootstrap 四种 kind。此前判据是 !isPluginSource(kind)，
+  // 只排除 plugin / plugin:*，放行了 skill-catalog、dsh-mnemon（两者文本都判 weak），
+  // 于是真实任务一旦不排在最前，mode 就从 0(spec) 漂移成 weak —— 与 #143 同类的时序 bug。
+  const fixTask = { source: { kind: 'user' }, content: [{ type: 'text', text: '排查一下为什么会报错，只分析原因不要改代码' }] }
+  const skillCatalog = { source: { kind: 'skill-catalog' }, content: [{ type: 'text', text: '<system-reminder>\nA skill is a reusable set of task-specific instructions.' }] }
+  const mnemon = { source: { kind: 'dsh-mnemon', form: 'instructions' }, content: [{ type: 'text', text: '[MNEMON] Search Documents for substantial project records.' }] }
+
+  // 单独看：两类注入文本本身都不带任务语义（落 weak），所以一旦被选中就会污染档位
+  assert.equal(classifyTask(extractText(skillCatalog)), 'weak')
+  assert.equal(classifyTask(extractText(mnemon)), 'weak')
+  assert.equal(classifyTask(extractText(fixTask)), 0)
+
+  // 真实任务在最前 —— 修复前后都应为 spec
+  assert.equal(sessionMode({ events: [
+    { type: 'user/message', data: fixTask },
+    { type: 'user/message', data: skillCatalog },
+    { type: 'user/message', data: mnemon },
+  ] }), 0)
+
+  // 真实任务被挤到最后 —— 修复前漂移成 'weak'，修复后仍须为 spec（口径与 firstUserText 对齐）
+  assert.equal(sessionMode({ events: [
+    { type: 'user/message', data: skillCatalog },
+    { type: 'user/message', data: mnemon },
+    { type: 'user/message', data: fixTask },
+  ] }), 0)
+
+  // 整份 transcript 没有 kind==='user' 时，保留退化兜底（取首条 user/message，不抛错）
+  assert.equal(sessionMode({ events: [
+    { type: 'user/message', data: skillCatalog },
+    { type: 'user/message', data: mnemon },
+  ] }), 'weak')
 })
 
 test('weak persona is model-specific (P11/P24)', () => {

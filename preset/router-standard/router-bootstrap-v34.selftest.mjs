@@ -128,5 +128,18 @@ check('v19-catalog-uses-runtime', src.includes('mark: runtimeMark(ctx.tools') &&
 check('v19-native-begin-desc', src.includes('呈现为 native 直调'))
 check('v19-no-stale-code-mode-contract', !src.includes('Code Mode 契约') && !src.includes('lossless JSON 结束'))
 
+// 12g. v1.21：接通 core 的 personaFor 多档 persona 路由 + 收窄 classifyTask 强制档
+check('v121-imports-personaFor', src.includes('sessionEvents, personaFor, classifyTask'))
+check('v121-personaOf-defined', src.includes('function personaOf(mode, modelId)'))
+check('v121-modeOf-single-source', src.includes('function modeOf(session, override, firstText)'))
+check('v121-modeOf-uses-firsttext', src.includes('firstUserText.get(session.id)') && src.includes('firstUserText.get(sid)'))
+// 口径同源：注入面与两个 dev_router_status（main + own-layer shim）都必须走 modeOf
+check('v121-status-mode-single-source', src.split('modeOf(').length >= 5 && !/const mode = overrideMap\(\)\.get\(sid\) \?\? sessionMode\(/.test(src))
+check('v121-imports-classifyTask', src.includes('personaFor, classifyTask'))
+check('v121-personaOf-used', src.split('personaOf(').length >= 4)
+check('v121-no-hardcoded-persona-in-assemble', !src.includes("text: RL_PERSONA, order: 0"))
+check('v121-status-uses-personaOf', src.includes("'persona=' + personaOf("))
+check('v121-version-bump', /const ROUTER_VERSION = 'v1\.2[1-9]/.test(src))
+
 if (fails.length) { console.error('SELFTEST FAIL:', fails.join(' | ')); process.exit(1) }
 console.log('SELFTEST PASS')

@@ -22,49 +22,43 @@
 - [🧪 测量工具](graded/scripts/measure.mjs)——`node scripts/measure.mjs 你的会话.jsonl`：任何人可对自己会话复算上述指标（脱敏：只输出数字）
 - [📁 实测数据](graded/docs/DATA.md)——三会话脱敏指标表+懈怠强度表+审计口径
 
-## 一键安装
+## 安装（适用于 DSH 0.1.7-rc.2 及以上）
+
+新版 DSH 不再扫描 `.dsh\\.agent-presets` 目录来发现 Agent 预设。安装本套件根包会通过 Bundle Patch 同时装配注入器和 `Router Standard`；不需要手动复制预设目录。
 
 ```powershell
+# 直接从 GitHub 安装整个套件：注入器 + Router Standard Bundle 预设
 dsh plugin --profile web add github:yjh051108/dsh-routing-suite
 ```
 
 > 本套装已含上述三组件（injector/preset/graded 均为仓库内普通目录，内容直接入库）；
 > graded 发布物：`graded/dsh-external-dsh-graded-mode-0.0.1-rc1.tgz`（或 Release 附件）。
 
-**DSH Target**：`>=0.1.0-rc.6 <0.2.0`（已跟进 rc.8 / 0.1.1-rc.2 / 0.1.2-alpha.1）
+**DSH Target**：`>=0.1.7-rc.2 <0.2.0`
 
-> DSH 目前处于 developer preview，官方明示会有破坏性变更（breaking changes）。
-> 本仓库的版本跟进记录见 `preset/CHANGELOG.md`。
+> DSH 0.1.7-rc.2 将 Agent 预设迁移为 Bundle Patch 声明；本套件的 `preset/router-standard.patch.yml` 会把旧路由 composition 注册为 `router-standard`。
 
-## 安装链（三步）
+## 从源码安装
 
 ```powershell
-# 1. 拉套装（单仓库：injector/preset 内容已直接入库，无需 submodule）
+# 1. 克隆套件（单仓库：injector/preset 内容已直接入库，无需 submodule）
 git clone https://github.com/yjh051108/dsh-routing-suite.git
 cd dsh-routing-suite
 
-# 2. 一键安装（注入器装配 + 预设复制 + 布局自检 + 提示重启）
-.\install.ps1
+# 2. 安装整个根包：注入器 + Router Standard Bundle 预设
+$dsh = Get-Command dsh -ErrorAction SilentlyContinue
+if ($dsh) {
+  dsh plugin --profile web add .
+} else {
+  npx '@deepseek-ai/dsh' plugin --profile web add .
+}
+
+# 3. 重启 DSH → 新会话选择 Router Standard
 ```
 
-或手动：
+也可以运行仓库内的 `install.ps1` 完成同样的安装。
 
-```powershell
-# 步骤 1：装配注入器（官方装配，重启后由 bundles 接管）
-dsh plugin --profile web add .\injector
-# dsh 不在 PATH 时：npx '@deepseek-ai/dsh' plugin --profile web add .\injector
-
-# 步骤 2：安装 router 预设（每个预设目录平铺复制到 .agent-presets 下，DSH 只扫一级子目录）
-$target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-standard'
-Copy-Item -Recurse .\preset\router-standard $target
-
-$target = Join-Path $env:USERPROFILE '.dsh\.agent-presets\router-spec'
-Copy-Item -Recurse .\preset\router-spec $target
-
-# 步骤 3：重启 DSH → 新会话选择 Router Standard / Router Spec (experimental)
-```
-
-> 注意：不要复制 `preset` 整目录（会多套一层，DSH 发现不了预设）。
+> 旧版 DSH（0.1.7-rc.1 及更早版本）的目录式安装才需要复制 `.dsh\\.agent-presets\\router-standard`；新版注册表不会读取该目录。
 
 ## 组件
 
