@@ -194,7 +194,9 @@ export function apply(ctx: Context, config: Config): void {
   // ctx.on('system-prompt/assemble', async (_assembly: unknown, context: any, next: () => Promise<any>) => {
   //   const assembled = await next()
   //   const agent = context.agent
-  //   if (!agent || agent.session.events.some((e: any) => e.type === 'tool/call')) return assembled
+  //   // DSH >= 0.1.2: Session.events → snapshotEvents()（双兼容读取；rc.8 回退 legacy 数组）
+  //   const evts = agent?.session?.snapshotEvents ? agent.session.snapshotEvents() : (agent?.session?.events || [])
+  //   if (!agent || evts.some((e: any) => e.type === 'tool/call')) return assembled
   //   const MINE = new Set(['${pkgName.replace(/[^a-z0-9_]/gi, '_')}_hello'])
   //   const CORE = '<核心工具>'
   //   return { ...assembled, tools: assembled.tools.filter((t: any) => !MINE.has(t.name) || t.name === CORE) }
@@ -403,7 +405,7 @@ const PLUGIN_ID = ${JSON.stringify(pkgName)}
 
 const CLIENT_EXTERNALS = [
   'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client',
-  'cordis',
+  '@deepseek-ai/cordis',
   '@deepseek-ai/dsh-client-ui-slots',
   '@deepseek-ai/dsh-client-runtime/client',
 ]
@@ -441,7 +443,7 @@ function scaffoldPackageJson(pkgName: string, description: string, form: string)
   const peerDeps: Record<string, string> = {
     '@deepseek-ai/dsh-llm': '>=0.0.1-rc <2',
     '@deepseek-ai/dsh-tools': '>=0.0.1-rc <2',
-    'cordis': '>=4.0.0-rc <5',
+    '@deepseek-ai/cordis': '>=4.0.0-rc <5',
     '@deepseek-ai/schemastery': '^3.18.2',
   }
   if (withClient) {
@@ -1049,7 +1051,7 @@ export function apply(ctx: AppContext, config: Config): void {
             // ═══ v0.3 重构：官方 REPLACE 语义（SPEC §1.1/4.3，实测校准）═══
             // 与 entry.update 的 REPLACE 分支同构（entry.ts L214-246）：
             //   import 新模块（经 entry.parent.tree——与 include 装配同路径）
-            //   → entry._dispose()（官方：_disposing 豁免 + entry.fiber 清空）
+            //   → 卸载旧 fiber（_disposing 豁免 + entry.fiber 清空）
             //   → fiber 创建（registry.plugin）+ 手动关联 entry
             //   → 失败 rollback（官方语义）
             // ⚠️ 实测校准（entry.ctx 不可用）：reboot 上下文（global setTimeout，
@@ -1057,18 +1059,28 @@ export function apply(ctx: AppContext, config: Config): void {
             // fiber 链，自杀后失效）——fiber 创建必须走 rebootCtx（ctx.root，
             // 原型链到 loader 活跃 fiber）。代价：fiber.parent 无 Entry.key →
             // loader 监听不自动设 fiber.entry → 手动关联（nf.entry + entry.fiber）
-            // 是 reboot 上下文的必要适配，且需 _disposing 豁免（entry._dispose
-            // 官方计数）与 disabled 兜底清理。
+            // 是 reboot 上下文的必要适配，且需 _disposing 豁免（官方计数）
+            // 与 disabled 兜底清理。
+            // ⚠️ 双兼容（B196/0.2.0-rc）：新版 loader（cordis-plugin-loader
+            // 1.0.6+）的 Entry 无 _dispose——旧契约（entry._dispose=fiber 卸载
+            // +计数）退化为 entry.fiber?.dispose()，两代 loader 均可自重载。
             const entry = selfEntry as any
-            if (!entry || typeof entry._dispose !== 'function') {
-              throw new Error('selfEntry 无官方 _dispose（loader 契约缺失）')
+            if (!entry || (typeof entry._dispose !== 'function' && !entry.fiber?.dispose)) {
+              throw new Error('selfEntry 无卸载入口（loader 契约缺失：无 _dispose 亦无 fiber.dispose）')
             }
             const rebootCtx = ctx.root as any
             const previousPlugin = entry.fiber?.runtime?.callback ?? null
             const fresh = rebootCtx.loader.unwrapExports(
               await entry.parent.tree.import(entry.options.name, () => []),
             )
-            await entry._dispose()
+            if (typeof entry._dispose === 'function') {
+              await entry._dispose()
+            } else {
+              const oldFiber = entry.fiber
+              if (oldFiber && typeof oldFiber.dispose === 'function') {
+                try { await oldFiber.dispose() } catch { /* 忽略（重建仍会执行） */ }
+              }
+            }
             const startWith = async (plugin: any): Promise<void> => {
               const fiber = rebootCtx.registry.plugin(plugin, entry.options.config ?? {}, entry.getOuterStack)
               fiber.entry = entry
@@ -3041,7 +3053,7 @@ export function apply(ctx: AppContext, config: Config): void {
         writeFileSync(join(tmpDir, 'package.json'), JSON.stringify({
           name: TEST_PKG, version: '0.0.1', private: true, type: 'module',
           main: './lib/index.js', files: ['lib'], license: 'BSD-3-Clause',
-          peerDependencies: { '@deepseek-ai/dsh-tools': '>=0.0.1-rc <2', 'cordis': '>=4.0.0-rc <5' },
+          peerDependencies: { '@deepseek-ai/dsh-tools': '>=0.0.1-rc <2', '@deepseek-ai/cordis': '>=4.0.0-rc <5' },
           devDependencies: { '@types/node': '^24.13.3', typescript: '^5.9.0' },
           scripts: { build: 'bash scripts/build.sh' },
         }, null, 2) + '\n', 'utf8')

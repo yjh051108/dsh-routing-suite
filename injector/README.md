@@ -160,7 +160,7 @@ dsh plugin --profile web add github:yjh051108/dsh-super-injector
 ### 30 行写一个"会思考的插件"（守护循环最小示例）
 
 ```ts
-import type { Context } from 'cordis'
+import type { Context } from '@deepseek-ai/cordis'
 import type LlmService from '@deepseek-ai/dsh-llm'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 

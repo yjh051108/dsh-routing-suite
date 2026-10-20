@@ -24,6 +24,7 @@ import { join } from 'node:path'
 import { apply as applyStandard } from './router-standard/router-bootstrap-v34.mjs' // v1.18.3：测试面=运行面（agent.cordis.yml 挂载 -v34）
 import { apply as applySpec } from './router-spec/router-bootstrap-v10.mjs' // v1.18.3: 测试面=运行面（agent.cordis.yml 挂载 -v10）
 import { classifyTask, sessionMode } from './router-standard/router-core.mjs'
+import { sessionMode as sessionModeRuntime } from './router-standard/router-core-v34.mjs' // v34 = 运行面（bootstrap 挂载 core-v34；未别名 core 是未同步的旧基线）
 
 // ── minimal Cordis-shaped context ──────────────────────────────────────────
 
@@ -122,6 +123,74 @@ test('first request: RL persona + phase_begin as the only first-turn tool (v0.9)
   assert.deepEqual(assembled.contexts, [])
   // no injection in the harness (no inbox): the decision stays on the real message
   assert.deepEqual(decision.messages.map((m) => m.id), ['m1'])
+})
+
+// ── dual-compat & watermark regression（DSH >= 0.1.2 snapshotEvents Session API）──
+
+test('dual-compat: sessionMode classifies a snapshotEvents()-only session (no legacy .events)', () => {
+  const modern = makeSession()
+  delete modern.events
+  modern.snapshotEvents = () => [{ type: 'user/message', data: userMessage('m1', '从零开发一个马里奥网页游戏，生成完整实现，构建可运行的网站应用') }]
+  assert.equal(sessionModeRuntime(modern), 1) // react — proves the read went through snapshotEvents()（runtime face = core-v34）
+})
+
+test('dual-compat: promotion check reads snapshotEvents() when legacy .events is absent', async () => {
+  process.env.DSH_ROUTER_STAGE_FILE = tmpStageFile()
+  const h = makeHarness(applyStandard, {})
+  const session = makeSession()
+  delete session.events // 0.1.5 形状：无 legacy 数组——读取必须走 snapshotEvents()
+  session.snapshotEvents = () => [
+    { type: 'user/message', data: userMessage('m6', '从零开发一个马里奥网页游戏') },
+    { type: 'tool/call', data: {} },
+  ]
+  const agent = { session, options: { provider: 'deepseek-official', model: 'deepseek-v4-flash' } }
+  h.agentRef.current = agent
+  h.emit('agent/inbox/claimed', { agent, message: userMessage('m1', '从零开发一个马里奥网页游戏') })
+  const assembled = await h.assemble(baseAssembled(), { agent, scope: agent })
+  assert.equal(assembled.tools.length, TOOLS.length, 'full catalog exposed — promotion was seen via snapshotEvents()')
+  assert.ok(assembled.sections.some((s) => s.name === 'router-stage'), 'stage section present — promoted branch taken')
+})
+
+test('watermark regression: persisted consumed survives reload — consumed history does not re-advance', async () => {
+  const file = tmpStageFile()
+  const sid = 'reload-session'
+  writeFileSync(file, JSON.stringify({ version: 2, sessions: { [sid]: { stage: 2, guided: true, consumed: 5, stageAtTime: Date.now() } } }))
+  process.env.DSH_ROUTER_STAGE_FILE = file
+  const h = makeHarness(applyStandard, {})
+  // 无时间戳事件：若 consumed 在加载时被丢弃（回退时间过滤），无时间戳事件恒计入 → delivery_check 重算 → 跳级
+  const session = { id: sid, header: {}, events: [
+    { type: 'user/message', data: userMessage('h1', '任务') },
+    { type: 'tool/call', data: { name: 'delivery_check' } },
+    { type: 'user/message', data: userMessage('h2', '继续') },
+    { type: 'tool/call', data: { name: 'todo_write' } },
+    { type: 'user/message', data: userMessage('h3', '继续2') },
+    { type: 'user/message', data: userMessage('h4', '继续3') },
+  ] }
+  const agent = makeStageAgent(session, [])
+  h.agentRef.current = agent
+  await h.preStep({ agent, messages: [userMessage('r', '继续')], turn: 9, step: 1 })
+  const disk = JSON.parse(readFileSync(file, 'utf8'))
+  assert.equal(disk.sessions[sid].stage, 2, 'history before the persisted consumed watermark must not re-advance after reload')
+})
+
+test('watermark regression: manual phase_advance consumes the signal window — stale delivery_check cannot jump stages', async () => {
+  const file = tmpStageFile()
+  process.env.DSH_ROUTER_STAGE_FILE = file
+  const h = makeHarness(applyStandard, {})
+  const session = makeSession()
+  const agent = makeStageAgent(session, [])
+  h.agentRef.current = agent
+  h.ctx.tools.view = () => ({ knownNames: [], visible: new Map(), restrictableNames: [] })
+  h.ctx.tools.schemas = () => []
+  await h.assemble(baseAssembled(), { agent, scope: agent }) // 填充 agents Map：避免 phase_advance 内 applyStageRestrict 因 currentAgent() 为空打 stderr 噪音
+  // 阶段 0 时调用过 delivery_check（非 0→1 完成信号，滞留窗口）
+  session.events.push({ type: 'tool/call', data: { name: 'delivery_check' } })
+  const pa = h.registeredTools.find((t) => t.name === 'phase_advance')
+  await pa.execute({ reason: 'manual' })
+  await pa.execute({ reason: 'manual' })
+  await h.preStep({ agent, messages: [userMessage('m', '继续')], turn: 3, step: 1 })
+  const disk = JSON.parse(readFileSync(file, 'utf8'))
+  assert.equal(disk.sessions[session.id].stage, 2, 'stale pre-advance delivery_check must not trigger 2→3')
 })
 
 test('phase_begin injects the bootstrap guide exactly once and persists guided (v0.9)', async () => {

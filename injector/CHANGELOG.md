@@ -5,6 +5,30 @@
 > **版本以 git tag 为准**：已发布 v0.3.1 / v0.3.3（GitHub Releases 资产）；未打 tag 的
 > 小节为开发史（其内容随下一个发布一并交付）。
 
+## [0.3.4] — 2026-10-20（未打 tag；适配 DSH 0.2.0-rc.x 的 scoped 生态）
+
+### 修复（B196 scoped 化收尾 + 自重载契约双兼容）
+
+- **脚手架/自检模板残留裸名**：`scaffoldPackageJson` 与自检测试包的 peerDeps、SCAFFOLD/
+  注入器自身的 tsdown client externals 中 `cordis` → `@deepseek-ai/cordis`。此前仅注入器
+  自身 import 与 build.sh 完成 scoped 化，模板仍产出裸 `"cordis": ">=4.0.0-rc <5"`——新 DSH
+  （0.2.0-rc，node_modules 只发布 `@deepseek-ai/cordis`）下脚手架插件 peer 不可解析
+- **根分发 package.json peerDeps**：`cordis`/`schemastery` → `@deepseek-ai/cordis` /
+  `@deepseek-ai/schemastery`
+- **自重载 reboot 双兼容（本版关键）**：新版 cordis-plugin-loader（1.0.6+ / DSH 0.2.0-rc）
+  的 `Entry` 已移除旧契约 `_dispose`（只剩 `fiber.dispose()`）。旧代码自重载 100% 触发
+  `reboot-failed: selfEntry 无官方 _dispose`，注入器永远无法在 0.2.0-rc 运行时换自己
+  （只能靠进程重启）。改为 `_dispose` 优先、`entry.fiber.dispose()` 退化的双契约实现，
+  两代 loader 均可自重载
+- **dist 构建链同步**：`scripts/build.sh` 的裸 `link_pkg` 更新为 scoped；补回缺失的
+  `scripts/prepare.mjs`
+
+### 验证
+
+- 注入器自检 8/8 PASS（DSH 0.2.0-rc.2 / Node v24.13.0）
+- 脚手架产物抽查：peerDeps 与 tsdown externals 全部 `@deepseek-ai/cordis`
+- 自重载实测：重载前后均为 [active]，日志无 `reboot-failed`（旧代码在此版本必挂）
+
 ## [0.3.3] — 2026-08-15（已发布，git tag v0.3.3）
 
 ### 更新（高性能引导升级为 P1-P23 完整认知）

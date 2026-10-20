@@ -1,6 +1,6 @@
 {
   "name": "@dsh-external/dsh-super-injector",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "dsh-routing-suite 分发入口：DSH 超级模组注入器（BepInEx 式运行时注入，免重启）+ router-standard 预设仓库。插件入口为 injector/，预设位于 preset/。",
   "private": true,
   "scripts": {
@@ -63,7 +63,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-tools": ">=0.0.1-rc <2",
-    "cordis": ">=4.0.0-rc <5",
-    "schemastery": "^3.18.0"
+    "@deepseek-ai/cordis": ">=4.0.0-rc <5",
+    "@deepseek-ai/schemastery": "^3.18.2"
   }
 }
