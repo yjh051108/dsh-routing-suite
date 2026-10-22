@@ -22,6 +22,7 @@
   },
   "files": [
     "injector/lib",
+    "injector/package.json",
     "injector/scripts",
     "cordis.patch.yml",
     "LICENSE",
