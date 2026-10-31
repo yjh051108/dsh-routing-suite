@@ -23,6 +23,20 @@ speced plan → check-in → group close-out → final check, with redteam gate 
 | **preset** | Reasoning-mode routing presets (router-standard / router-spec, persona-based routing) | [preset/README.md](preset/README.md) · [experiments](preset/docs/experiments.md) |
 | **graded** | Graded mode: session-level two-level task protocol (6 tools + 3 modes + per-item mode + redteam gate + audit endpoint + super panel) | [graded/README.md](graded/README.md) · [ARCHITECTURE](graded/docs/ARCHITECTURE.md) · [THEORY](graded/docs/THEORY.md) · [DATA](graded/docs/DATA.md) |
 
+## DSH 0.2.x
+
+DSH 0.2.x removed agent-preset directory scanning (`dsh-agent-preset-registry`:
+*"the registry neither scans directories nor accepts preset paths"*). A preset is
+now an ordinary `@deepseek-ai/dsh-agent-preset` row inserted through a bundle
+patch, so the presets ship as their own package:
+
+```bash
+dsh plugin --profile web add github:yjh051108/dsh-router-standard
+```
+
+Restart DSH afterwards; Router Standard / Router Spec (experimental) then show up
+in the preset picker. 0.1.x users keep using the install chain below —
+`install.ps1` / `install.sh` pick the right path from the DSH version.
 ## Install chain (three steps)
 
 ```powershell

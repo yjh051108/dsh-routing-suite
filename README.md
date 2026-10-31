@@ -22,6 +22,19 @@
 - [🧪 测量工具](graded/scripts/measure.mjs)——`node scripts/measure.mjs 你的会话.jsonl`：任何人可对自己会话复算上述指标（脱敏：只输出数字）
 - [📁 实测数据](graded/docs/DATA.md)——三会话脱敏指标表+懈怠强度表+审计口径
 
+
+### DSH 0.2.x
+
+DSH 0.2.x 取消了 agent-preset 目录扫描（`dsh-agent-preset-registry`：*"the registry neither scans
+directories nor accepts preset paths"*）。预设现在必须作为 `@deepseek-ai/dsh-agent-preset` 行经 bundle
+patch 注入，所以预设以独立包的形式装配：
+
+```bash
+dsh plugin --profile web add github:yjh051108/dsh-router-standard
+```
+
+装完重启 DSH，GUI 新建会话时即可选择 Router Standard / Router Spec (experimental)。
+0.1.x 用户继续用下面的一键安装即可（`install.ps1` / `install.sh` 会按 DSH 版本自动选择路径）。
 ## 一键安装
 
 ```powershell
@@ -31,7 +44,7 @@ dsh plugin --profile web add github:yjh051108/dsh-routing-suite
 > 本套装已含上述三组件（injector/preset/graded 均为仓库内普通目录，内容直接入库）；
 > graded 发布物：`graded/dsh-external-dsh-graded-mode-0.0.1-rc1.tgz`（或 Release 附件）。
 
-**DSH Target**：`>=0.1.0-rc.6 <0.2.0`（已跟进 rc.8 / 0.1.1-rc.2 / 0.1.2-alpha.1）
+**DSH Target**：`>=0.1.0-rc.6 <0.3.0`（0.2.x 起预设改由 bundle patch 注入，见下方「DSH 0.2.x」）
 
 > DSH 目前处于 developer preview，官方明示会有破坏性变更（breaking changes）。
 > 本仓库的版本跟进记录见 `preset/CHANGELOG.md`。
