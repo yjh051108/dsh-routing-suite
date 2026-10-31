@@ -39,16 +39,54 @@ if (Test-Path (Join-Path $injector 'lib\index.js')) {
 Write-Host '=== [2/3] 安装 router presets ===' -ForegroundColor Cyan
 $presetRoot = Join-Path $root 'preset'
 $presets = @('router-standard', 'router-spec')
-foreach ($name in $presets) {
-  $target = Join-Path $env:USERPROFILE (Join-Path '.dsh\.agent-presets' $name)
-  if (Test-Path $target) {
-    Write-Host "预设已存在：$target（如需覆盖请先手动删除）" -ForegroundColor Yellow
-    continue
+
+# DSH 0.2.x 取消了预设目录扫描：预设必须作为 '@deepseek-ai/dsh-agent-preset' 行
+# 经 bundle patch 插入。因此 0.2.x 走 `dsh plugin add <preset 包>`；
+# 0.1.x 仍需把目录平铺复制到 ~/.dsh/.agent-presets/。
+$dshCmd = Get-Command dsh -ErrorAction SilentlyContinue
+if (-not $dshCmd) { $dshCmd = Get-Command npx -ErrorAction SilentlyContinue }
+$dshVersion = ''
+if ($dshCmd -and $dshCmd.Source -like '*dsh*') {
+  try { $dshVersion = (& $dshCmd.Source --version 2>$null) -replace '^dsh version ', '' } catch { $dshVersion = '' }
+}
+$is02x = $false
+if ($dshVersion -match '^(\d+)\.(\d+)') {
+  $major = [int]$Matches[1]; $minor = [int]$Matches[2]
+  $is02x = ($major -gt 0) -or ($major -eq 0 -and $minor -ge 2)
+}
+if ($dshVersion -and -not $is02x) {
+  Write-Host ("DSH {0} — 走 0.1.x 预设安装路径（目录复制）" -f $dshVersion) -ForegroundColor DarkGray
+}
+
+if ($is02x) {
+  # 0.2.x：把 preset/ 作为 bundle-patch 包装配，预设行随包插入。
+  if ($dshCmd) {
+    & $dshCmd.Source plugin --profile web add $presetRoot 2>&1 | Out-Host
+  } else {
+    & npx '@deepseek-ai/dsh' plugin --profile web add $presetRoot 2>&1 | Out-Host
   }
-  New-Item -ItemType Directory -Force -Path (Split-Path $target) | Out-Null
-  # 平铺复制：DSH 的 agent-presets 发现只扫一级子目录，每个预设目录必须直接含 agent.cordis.yml
-  Copy-Item -Recurse (Join-Path $presetRoot $name) $target
-  Write-Host "预设已安装：$target" -ForegroundColor Green
+  Write-Host '预设已装配（0.2.x bundle-patch 路径）' -ForegroundColor Green
+} else {
+  # 0.1.x：目录扫描仍生效，平铺复制即可。
+  foreach ($name in $presets) {
+    $target = Join-Path $env:USERPROFILE (Join-Path '.dsh\.agent-presets' $name)
+    if (Test-Path $target) {
+      Write-Host "预设已存在：$target（如需覆盖请先手动删除）" -ForegroundColor Yellow
+      continue
+    }
+    New-Item -ItemType Directory -Force -Path (Split-Path $target) | Out-Null
+    Copy-Item -Recurse (Join-Path $presetRoot $name) $target
+    Write-Host "预设已安装：$target" -ForegroundColor Green
+  }
+  Write-Host '--- 自检预设布局 ---' -ForegroundColor Cyan
+  foreach ($name in $presets) {
+    $check = Join-Path $env:USERPROFILE (Join-Path '.dsh\.agent-presets' (Join-Path $name 'agent.cordis.yml'))
+    if (Test-Path $check) {
+      Write-Host "OK: $name -> agent.cordis.yml 就位" -ForegroundColor Green
+    } else {
+      Write-Host "FAIL: $name 缺少 agent.cordis.yml（$check）——预设不会被 DSH 发现" -ForegroundColor Red
+    }
+  }
 }
 
 # 自检：两个预设一级目录必须直接含 agent.cordis.yml（防嵌套层级错误）

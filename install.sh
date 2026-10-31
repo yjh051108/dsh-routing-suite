@@ -103,21 +103,39 @@ else
 fi
 
 info '[2/4] 安装 router presets'
-mkdir -p "$AGENT_PRESETS_DIR"
-for name in "${PRESET_NAMES[@]}"; do
-  if [ ! -d "$ROOT/preset/$name" ]; then
-    err "仓库缺少预设源码：$ROOT/preset/$name（跳过）"
-    continue
+
+# DSH 0.2.x 取消了预设目录扫描：预设必须作为 '@deepseek-ai/dsh-agent-preset' 行
+# 经 bundle patch 插入。0.2.x 走 `dsh plugin add <preset 包>`；
+# 0.1.x 仍需把目录平铺复制到 .agent-presets/。
+DSH_VERSION="$( { dsh --version 2>/dev/null || npx @deepseek-ai/dsh --version 2>/dev/null; } | head -n1 )"
+DSH_VERSION="${DSH_VERSION#dsh version }"
+IS_02X=0
+if printf '%s' "$DSH_VERSION" | grep -Eq '^0\.(2|[3-9]|[1-9][0-9])'; then IS_02X=1; fi
+if [ -n "$DSH_VERSION" ] && [ "$IS_02X" = "0" ]; then
+  echo "DSH $DSH_VERSION — 走 0.1.x 预设安装路径（目录复制）"
+fi
+
+if [ "$IS_02X" = "1" ]; then
+  # 0.2.x：把 preset/ 作为 bundle-patch 包装配，预设行随包插入。
+  if command -v dsh >/dev/null 2>&1; then
+    dsh plugin --profile web add "$ROOT/preset" || err '预设包装配失败'
+  else
+    npx '@deepseek-ai/dsh' plugin --profile web add "$ROOT/preset" || err '预设包装配失败'
   fi
-  target="$AGENT_PRESETS_DIR/$name"
-  if [ -d "$target" ]; then
-    warn "预设已存在：$target（如需覆盖请先手动删除）"
-    continue
-  fi
-  # 平铺复制：agent-presets 只扫一级子目录，每个预设目录必须直接含 agent.cordis.yml
-  cp -R "$ROOT/preset/$name" "$target"
-  ok "预设已安装：$target"
-done
+  ok '预设已装配（0.2.x bundle-patch 路径）'
+else
+  # 0.1.x：目录扫描仍生效，平铺复制即可。
+  mkdir -p "$AGENT_PRESETS_DIR"
+  for name in "${PRESET_NAMES[@]}"; do
+    target="$AGENT_PRESETS_DIR/$name"
+    if [ -d "$target" ]; then
+      warn "预设已存在：$target（如需覆盖请先手动删除）"
+      continue
+    fi
+    cp -R "$ROOT/preset/$name" "$target"
+    ok "预设已安装：$target"
+  done
+fi
 
 info '[3/4] 自检预设布局'
 failed=0
