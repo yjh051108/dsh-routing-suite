@@ -88,7 +88,7 @@ function scanMode(messages) {
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i]
     if (!m || m.role !== 'user') continue // 只扫用户消息：模型自报不生效为改口
-    if (m.source && m.source.kind === 'plugin') continue // 跳过本插件注入消息
+    if (m.source && String(m.source.kind || '').startsWith('plugin')) continue // 跳过本插件注入消息（v4: kind 形如 plugin:<name>）
     let txt = ''
     for (const x of (m.content || [])) {
       if (x && typeof x === 'object' && x.type === 'text') txt += x.text || ''
@@ -475,7 +475,7 @@ export function apply(ctx, config) {
         for (let i = messages.length - 1; i >= 0; i--) {
           const m = messages[i]
           if (!m || m.role !== 'user') continue
-          if (m.source && m.source.kind === 'plugin') continue // 跳过本插件注入的 userMsg
+          if (m.source && String(m.source.kind || '').startsWith('plugin')) continue // 跳过本插件注入的 userMsg（v4: kind 形如 plugin:<name>）
           let txt2 = ''
           for (const x of (m?.content || [])) {
             if (x && typeof x === 'object' && x.type === 'text') txt2 += x.text || ''
