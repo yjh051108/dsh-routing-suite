@@ -52,6 +52,7 @@
     "build": "bash scripts/build.sh",
     "prepare": "node scripts/prepare.mjs",
     "build:client": "tsdown",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test tests/*.test.mjs"
   }
 }

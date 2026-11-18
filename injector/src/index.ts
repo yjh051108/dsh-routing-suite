@@ -435,6 +435,45 @@ const clientBundle: UserConfig = {
 export default [clientBundle] satisfies UserConfig[]
 `
 
+/** patch 里的 loader entry id：包名去掉 scope + 非字母数字转 `-`。 */
+function scaffoldEntryId(pkgName: string): string {
+  const bare = pkgName.includes('/') ? pkgName.slice(pkgName.indexOf('/') + 1) : pkgName
+  return bare.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'plugin'
+}
+
+/** bundle patch：官方装配层插入一行 loader entry（运行时注入不读它）。 */
+function scaffoldPatch(entryId: string, pkgName: string): string {
+  return `# 官方装配层：dsh plugin --profile <p> add <本目录> 时按此文件插入 loader entry。
+# 运行时注入（dev_inject_plugin）不读它，两条通道共用同一个 package.json。
+- insert:
+    - id: ${entryId}
+      name: '${pkgName}'
+`
+}
+
+/** 展示资源：locale 字典（官方 inventory 的标题/描述源，缺了只显示裸模块名）。 */
+function scaffoldLocale(pkgName: string, description: string, form: string): string {
+  const title = pkgName.includes('/') ? pkgName.slice(pkgName.indexOf('/') + 1) : pkgName
+  return JSON.stringify({
+    meta: {
+      title,
+      description: description || title + '（' + form + ' 形态）',
+    },
+  }, null, 2) + '\n'
+}
+
+/** 图标：占位 SVG（方块 + 包名首字母），官方要求 SVG/PNG/JPEG/WebP 且 <256 KiB。 */
+function scaffoldIcon(pkgName: string): string {
+  const title = pkgName.includes('/') ? pkgName.slice(pkgName.indexOf('/') + 1) : pkgName
+  const letter = (title.match(/[a-z0-9]/i)?.[0] ?? 'd').toUpperCase()
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="${letter}">
+  <rect width="64" height="64" rx="14" fill="#247bbf"/>
+  <text x="32" y="42" font-family="system-ui, sans-serif" font-size="30" font-weight="600"
+        fill="#ffffff" text-anchor="middle">${letter}</text>
+</svg>
+`
+}
+
 /** 统一 package.json 模板（peerDeps 范围声明，不硬编码版本）。 */
 function scaffoldPackageJson(pkgName: string, description: string, form: string): string {
   const withClient = form === 'ui-panel' || form === 'hybrid'
@@ -455,7 +494,10 @@ function scaffoldPackageJson(pkgName: string, description: string, form: string)
     type: 'module',
     main: './lib/index.js',
     types: './lib/types/index.d.ts',
-    files: ['lib'],
+    files: ['lib', 'cordis.patch.yml', 'locale/*.json', 'icon.svg', 'README.md'],
+    // 展示元数据：官方 inventory 的标题/描述来自 `<pkg>/locale/en.json`
+    // （app-boot readPluginMeta），图标取 package.json 同层相对路径（或 exports `./icon`）。
+    icon: './icon.svg',
     license: 'BSD-3-Clause',
     peerDependencies: peerDeps,
     devDependencies: {
@@ -467,17 +509,27 @@ function scaffoldPackageJson(pkgName: string, description: string, form: string)
       typecheck: 'tsc -p tsconfig.json --noEmit',
     },
   }
+  const exportsMap: Record<string, unknown> = {
+    '.': { types: './lib/types/index.d.ts', default: './lib/index.js' },
+    './package.json': './package.json',
+    './locale/*.json': './locale/*.json',
+    './icon': './icon.svg',
+  }
   if (withClient) {
     ;(pkg.devDependencies as Record<string, string>)['tsdown'] = '^0.22.14'
     ;(pkg.scripts as Record<string, string>)['build:client'] = 'tsdown'
-    ;(pkg as Record<string, unknown>).exports = {
-      '.': { types: './lib/types/index.d.ts', default: './lib/index.js' },
-      './client': { types: './lib/types/client/index.d.ts', default: './lib/client.js' },
-      './package.json': './package.json',
-    }
-    ;(pkg as Record<string, unknown>).dsh = {
-      client: { inject: ['@deepseek-ai/dsh-client-runtime', '@deepseek-ai/dsh-client-ui-slots'], platform: 'web' },
-    }
+    exportsMap['./client'] = { types: './lib/types/client/index.d.ts', default: './lib/client.js' }
+  }
+  ;(pkg as Record<string, unknown>).exports = exportsMap
+  // ⚠️ dsh.bundle 必须**无条件**发（host-only 也要）：官方 `dsh plugin add` /
+  // plugin_manager{install_bundle} 只认 bundle——没有它 CLI 只打一行 warning 把它当
+  // 普通依赖装、entry 永不装配。早先只有 client 表单才设 dsh 字段，等于脚手架产物
+  // 装不回 profile，只有运行时注入器吃得下。
+  ;(pkg as Record<string, unknown>).dsh = {
+    bundle: { patch: './cordis.patch.yml' },
+    ...(withClient
+      ? { client: { inject: ['@deepseek-ai/dsh-client-runtime', '@deepseek-ai/dsh-client-ui-slots'], platform: 'web' } }
+      : {}),
   }
   return JSON.stringify(pkg, null, 2) + '\n'
 }
@@ -2826,7 +2878,7 @@ export function apply(ctx: AppContext, config: Config): void {
 
   safeRegister(defineTool({
     name: 'dev_scaffold_plugin',
-    description: '插件生产线：生成四种形态的插件骨架（toolkit 工具包 / daemon-loop 守护循环(timer+LLM 自主 agent loop) / ui-panel UI 面板 / hybrid 混合）——package.json（peerDeps 范围声明不硬编码版本）+ tsconfig + build.sh（DSH_CHECKOUT 自动探测）+ 形态源码（资源挂 ctx.effect 规范）+ 可选 client 骨架。生成后：dev_build_plugin 构建 → dev_inject_plugin 注入。',
+    description: '插件生产线：生成四种形态的插件骨架（toolkit 工具包 / daemon-loop 守护循环(timer+LLM 自主 agent loop) / ui-panel UI 面板 / hybrid 混合）——package.json（peerDeps 范围声明 + dsh.bundle 双通道）+ cordis.patch.yml + locale/icon 展示资源 + tsconfig + build.sh（DSH_CHECKOUT 自动探测）+ 形态源码（资源挂 ctx.effect 规范）+ 可选 client 骨架。产物两条通道都能装：官方 dsh plugin add / plugin_manager install_bundle（持久），或 dev_build_plugin → dev_inject_plugin（运行时）。',
     parameters: {
       dir: { type: 'string', required: true, description: '目标目录（绝对路径，不存在则创建）' },
       name: { type: 'string', required: true, description: '插件名（如 my-tool；或完整包名 @scope/my-tool）' },
@@ -2849,14 +2901,43 @@ export function apply(ctx: AppContext, config: Config): void {
         return 'ERROR: name 非法（小写字母/数字/-/_，可带 @scope/）'
       }
       const pkgName = rawName.startsWith('@') ? rawName : '@dsh-external/' + rawName
+      const entryId = scaffoldEntryId(pkgName)
       try {
         mkdirSync(targetDir, { recursive: true })
         const files: Array<[string, string]> = [
           ['package.json', scaffoldPackageJson(pkgName, args.description ?? '', form)],
+          // bundle patch + 展示资源：缺了它们官方通道装不上（not-bundle），
+          // inventory 也只显示裸模块名。两条通道共用同一份产物。
+          ['cordis.patch.yml', scaffoldPatch(entryId, pkgName)],
+          ['locale/en.json', scaffoldLocale(pkgName, args.description ?? '', form)],
+          ['icon.svg', scaffoldIcon(pkgName)],
           ['tsconfig.json', SCAFFOLD_TSCONFIG],
           ['.gitignore', SCAFFOLD_GITIGNORE],
           ['scripts/build.sh', SCAFFOLD_BUILD_SH],
-          ['README.md', `# ${pkgName}\n\n${args.description ?? pkgName + '（' + form + ' 形态）'}\n\n由 dsh-super-injector dev_scaffold_plugin 生成。\n\n## 构建与注入\n\n\`\`\`bash\nDSH_CHECKOUT=<checkout> bash scripts/build.sh\n# 注入器环境内：dev_inject_plugin <本目录>\n\`\`\`\n`],
+          ['README.md', `# ${pkgName}
+
+${args.description ?? pkgName + '（' + form + ' 形态）'}
+
+由 dsh-super-injector dev_scaffold_plugin 生成。产物是**标准 DSH bundle**，两条通道都能装：
+
+\`\`\`bash
+# 1) 构建
+DSH_CHECKOUT=<checkout> bash scripts/build.sh
+
+# 2a) 持久装配（官方通道，重启后仍在；也可用插件页「添加插件」）
+dsh plugin --profile web add <本目录>
+
+# 2b) 或运行时注入（免重启、不写 profile；改代码 → 重建 → 自动重载）
+#     注入器环境内：dev_inject_plugin <本目录>
+\`\`\`
+
+## 展示资源
+
+- \`locale/en.json\` — 设置页/插件清单里的标题与描述（\`meta.title\` / \`meta.description\`）
+- \`icon.svg\` — 图标（官方要求 SVG/PNG/JPEG/WebP 且 <256 KiB）
+
+发布前请把占位图标与文案换成真实内容。
+`],
         ]
         if (form === 'toolkit') {
           files.push(['src/index.ts', scaffoldToolkitSrc(pkgName, args.description ?? '')])
@@ -2895,7 +2976,7 @@ export function apply(ctx: AppContext, config: Config): void {
           }
         }
         auditLog('scaffold', `${pkgName}（${form}）→ ${targetDir}`)
-        return `OK: ${pkgName}（${form} 形态）已生成于 ${targetDir}\n- ${files.length} 个文件\n- client 骨架校验通过（inject 声明 + register name）\n下一步：dev_build_plugin {"dir": "${targetDir.replace(/\\/g, '/')}"} → dev_inject_plugin {"dir": "${targetDir.replace(/\\/g, '/')}"}`
+        return `OK: ${pkgName}（${form} 形态）已生成于 ${targetDir}\n- ${files.length} 个文件（含 cordis.patch.yml + locale/en.json + icon.svg —— 标准 bundle 形态）\n- client 骨架校验通过（inject 声明 + register name）\n下一步二选一：\n  · 持久装配：dev_build_plugin {"dir": "${targetDir.replace(/\\/g, '/')}"} → dsh plugin --profile web add "${targetDir.replace(/\\/g, '/')}"\n  · 运行时注入：dev_build_plugin {"dir": "..."} → dev_inject_plugin {"dir": "${targetDir.replace(/\\/g, '/')}"}`
       } catch (e) {
         return 'ERROR: 生成失败: ' + String(e)
       }
@@ -3199,17 +3280,21 @@ export function apply(ctx: AppContext, config: Config): void {
     ctx.systemPrompt.context({
       name: 'dsh-super-injector',
       order: -90,
-      // 引导（首次接触的 agent 从这段获得完整认知）：
-      // 1) dev_* 工具 = dsh-super-injector（运行时注入通道）；
-      // 2) 插件形态无上限：工具包 / 守护循环（timer+LLM 自主 agent loop）/
-    //    UI 面板 / 混合形态，同一通道——注入即完整生效（host+UI）、可热
-    //    重载与自重载、卸载即净；
-    // 3) 插件自身的提示词/工具/循环皆可自我优化（改→build→重载闭环）；
-    // 4) 资源复用：建新插件优先克隆/借鉴/重构生态已有资源（dsh-external
-    //    仓库、已注入插件、官方 packages 的服务面与构建模式），不重复造轮子；
-    // 5) 使命：若注入器无法支撑此闭环，优先修复注入器。
-    // ⚠️ 静态常量文本（缓存原则：静态到头）——严禁动态拼接。
-    text: '本环境装有 dsh-super-injector（dev_* 工具）：任意本地插件包可运行时注入——工具包/守护循环（timer+LLM 自主 agent loop）/UI 面板/混合形态，同一通道；注入即完整生效（host+UI）、可热重载与自重载、卸载即净。插件自身的提示词/工具/循环皆可自我优化；建新插件优先克隆/借鉴/重构生态已有资源（dsh-external 仓库、已注入插件、官方 packages 模式），不重复造轮子。若注入器无法支撑此闭环，优先修复注入器。从零体验路径：dev_plugin_status → dev_self_test → dev_scaffold_plugin → dev_build_plugin → dev_inject_plugin → dev_uninject_plugin。',
+      // 引导（首次接触的 agent 从这段获得完整认知）。
+      // ⚠️ 分工原则：持久安装归官方（bundle/配置即状态），本插件只吃"官方留白的
+      // 运行时面"。这段本来把 dev_* 生产线写成"从零唯一路径"，与官方 Creator 模式
+      // （cordis-plugin-development 技能 + plugin_manager）在同一前缀缓存区互相打架
+      // （两条叙事 → 注意力稀释 + 选错通道：持久安装本不需要 build）。
+      // 现在只声明**不可替代的运行时能力**，并显式让出持久安装：
+      // 1) dev_* = 运行时通道（注入/热重载/侧挂/卸载），不写 profile、免重启；
+      // 2) 持久安装/启停/版本豁免 → 官方 plugin_manager / dsh plugin add（或插件页）；
+      // 3) 插件形态无上限：工具包 / 守护循环（timer+LLM 自主 agent loop）/
+      //    UI 面板 / 混合形态——注入即完整生效（host+UI）、卸载即净；
+      // 4) 建新插件先克隆/借鉴生态已有资源（dsh-external、已注入插件、官方 packages），
+      //    打包形状与展示资源见 dev_scaffold_plugin 产物；
+      // 5) 若注入器无法支撑该闭环，优先修复注入器。
+      // ⚠️ 静态常量文本（缓存原则：静态到头）——严禁动态拼接。
+      text: '本环境装有 dsh-super-injector（dev_* 工具），负责 DSH 的**运行时**通道：任意本地插件包可当场注入（工具包/守护循环(timer+LLM 自主 agent loop)/UI 面板/混合形态，同一通道），注入即完整生效（host+UI），可热重载、可卸载且卸载即净，全程不写 profile、不重启。分工：持久安装/启停/卸载归官方装配层（plugin_manager / dsh plugin add / 插件页），dev_* 只用于「还没进 profile 的目录」、改完即生效、以及会话内临时增删工具（dev_stage_*）。做插件：dev_scaffold_plugin 生成标准 bundle（package.json + cordis.patch.yml + 展示资源）→ dev_build_plugin 打包 → 按上句分工选持久装配或 dev_inject_plugin。建新插件优先克隆/借鉴生态已有资源（dsh-external 仓库、已注入插件、官方 packages），不重复造轮子；若注入器撑不住这条闭环，优先修注入器。',
     })
   } catch (e) {
     logger.warn('[super-injector] systemPrompt.context 重复注册容忍（跳过，新实例继续运行）: %s', e instanceof Error ? e.message : String(e))

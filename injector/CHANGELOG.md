@@ -5,6 +5,26 @@
 > **版本以 git tag 为准**：已发布 v0.3.1 / v0.3.3（GitHub Releases 资产）；未打 tag 的
 > 小节为开发史（其内容随下一个发布一并交付）。
 
+## [未发布] — 2026-11-18
+
+### 修复（脚手架产物装不回 profile）
+
+- **`dev_scaffold_plugin` 不再发"半残"包**：此前只写 `dsh.client`、**从不写
+  `dsh.bundle`、也不生成 `cordis.patch.yml`** ⇒ 官方 `dsh plugin add` 只打一行
+  warning 把它当普通依赖装、entry 永不装配（`plugin_manager{install_bundle}`
+  更是直接 not-bundle）。产物只有运行时注入器吃得下，等于"造得出、装不回"。
+  现在四种形态统一发 `dsh.bundle.patch` + `cordis.patch.yml`（`- insert:` 一行
+  同名 entry）+ `files` 白名单，一个产物同时支持持久装配与运行时注入。
+- **补展示资源**：`locale/en.json`（`meta.title` / `meta.description`——官方
+  inventory 的标题/描述来源，缺了显示裸模块名）+ `icon.svg` 占位图标，并在
+  `exports` 暴露 `./locale/*.json` 与 `./icon`。
+- **静态引导让出持久安装**：`systemPrompt.context` 原文把 dev_* 生产线写成
+  "从零唯一路径"，与官方 Creator 模式（`cordis-plugin-development` 技能 +
+  `plugin_manager`）在同一前缀缓存区互相打架（选错通道：持久安装本不需要 build）。
+  现在只声明不可替代的运行时能力（注入/热重载/卸载/侧挂），持久安装/启停归官方装配层。
+- 回归测试 `tests/scaffold-bundle.test.mjs`（四条：dsh.bundle 必发、三文件必写出、
+  files/exports 覆盖、已构建 lib 与 src 同步）。
+
 ## [0.3.3] — 2026-08-15（已发布，git tag v0.3.3）
 
 ### 更新（高性能引导升级为 P1-P23 完整认知）
